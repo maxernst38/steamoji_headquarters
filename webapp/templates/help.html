@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}How it's calculated · VEX Tracker{% endblock %}
+{% block heading %}How it's calculated{% endblock %}
+{% block subheading %}
+  Every derived number in this app, what it means, and where it is weak.
+  Figures on this page are computed live from your catalog, so they cannot go stale.
+{% endblock %}
+
+{% block content %}
+
+<div class="panel">
+  <h2>Elo</h2>
+  <p class="note">
+    A sequential rating. Every team starts at <span class="mono">{{ elo_start|int }}</span>. For
+    each match, the two alliances play as the <strong>mean</strong> of their members' ratings, and
+    the expected result comes from the standard logistic curve:
+  </p>
+  <pre class="log">expected_red = 1 / (1 + 10 ^ ((rating_blue - rating_red) / 400))
+
+actual      = 1 if red won, 0.5 if tied, 0 if red lost
+change      = K x (actual - expected)        with K = {{ elo_k|int }}
+
+every red member: rating += change
+every blue member: rating -= change</pre>
+  <p class="note">
+    The 400 is what makes a 400-point gap mean roughly a 10:1 expected win ratio — it is the
+    constant that defines the scale, not a tuned parameter. <strong>K = {{ elo_k|int }}</strong> is
+    how far one match can move a rating, and it <em>is</em> a choice: higher reacts faster and is
+    noisier, lower is stabler and slower to notice a team improving.
+  </p>
+  <p class="note">
+    Alliances use the <strong>mean</strong> rather than the sum so ratings stay on the familiar
+    ~1500 scale and a two-team alliance stays comparable to the one-team entries that appear in
+    some elimination records. Every member takes the same update — the model cannot tell which
+    partner was responsible.
+  </p>
+  <p class="note">
+    Matches are replayed in order. Where a match has no scheduled time — which is
+    <strong>every elimination match</strong>, since those are not pre-scheduled — the order falls
+    back to event date plus round, instance and match number, which within an event is the exact
+    order rather than an approximation.
+  </p>
+  <h2>What Elo can and cannot tell you</h2>
+  <p class="note">
+    Unlike OPR it carries <em>across</em> events, which is what makes it the default ordering of
+    the teams table. But it only links events that share teams. Your catalog currently has
+    <strong>{{ pools }} separate pools</strong>; ratings in different pools never exchanged
+    information, so comparing across them compares independent random walks. A team outside the
+    main pool is flagged on its own page.
+  </p>
+  {% if elo_spread %}
+  <p class="note">
+    Elo is <strong>zero-sum</strong> — every point won is a point lost — so the mean across all
+    {{ elo_count }} rated teams is {{ elo_mean }} by construction, with a standard deviation of
+    {{ elo_sd }}. Observed range {{ elo_spread.min }} to {{ elo_spread.max }}, median
+    {{ elo_spread.median }}.
+  </p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>OPR, DPR and CCWM</h2>
+  <p class="note">
+    These separate a team from its partners, which win rate and average score cannot do. Each
+    alliance in a match is one equation — the sum of its members' ratings should equal its score —
+    and the whole event is solved at once by least squares:
+  </p>
+  <pre class="log">A x = s        A = one row per alliance, 1 where a team played
+                x = the per-team rating being solved for
+                s = that alliance's score        -> OPR
+                s = the opposing alliance's score -> DPR
+
+CCWM = OPR - DPR</pre>
+  <p class="note">
+    <strong>OPR</strong> is what a team contributed to its own alliance's score.
+    <strong>DPR</strong> is what it allowed the opposition — <em>lower is better</em>.
+    <strong>CCWM</strong> is the difference, and it is the one to lead with.
+  </p>
+  <p class="note">
+    Why DPR earns its place: at your Mall of America event the undefeated winner ranked only
+    <strong>6th on OPR</strong>. Their scoring was ordinary; what made them unbeatable was holding
+    opponents near zero. Only DPR sees that, and CCWM put them 1st. OPR and DPR correlate at just
+    −0.28 there, so DPR is not OPR mirrored.
+  </p>
+  <h2>Read them as rankings, not quantities</h2>
+  <p class="note">
+    {% if quality %}
+    At that event the fit was <strong>R² {{ quality.r2 }}</strong> — residual RMS
+    {{ quality.residual_rms }} points against a score spread of {{ quality.score_sd }}. So it
+    explains about a third of score variance, and each team's figure rests on roughly five
+    alliances.
+    {% endif %}
+    DPR can come out slightly negative; a team cannot cause negative opponent points, that is the
+    fit overshooting. And a team playing pure defense suppresses rather than scores, so it reads
+    as low OPR <em>and</em> low DPR.
+  </p>
+  <p class="note">
+    <strong>They are only comparable within one event.</strong> Teams at different events never
+    shared a match, so the systems are separate and sit on unrelated scales. The teams table shows
+    an average across a team's events as a rough guide; the per-event figures on a team page are
+    the real numbers.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Event importance</h2>
+  <p class="note">
+    A judgement dressed as a number. The weights are a choice, not a measurement, which is why the
+    three parts are shown under every score as <span class="mono">level/size/strength</span>
+    instead of being collapsed into one opaque figure.
+  </p>
+  <table>
+    <thead><tr><th>Component</th><th class="right">Weight</th><th>What it reads</th></tr></thead>
+    <tbody>
+      <tr><td>Level</td><td class="num right">{{ (weights.level * 100)|int }}%</td>
+        <td class="muted">The event's own classification from the API —
+          {% for name, value in levels.items() %}{{ name }} {{ (value*100)|int }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>
+      <tr><td>Field size</td><td class="num right">{{ (weights.size * 100)|int }}%</td>
+        <td class="muted">Registered teams, log-scaled against a reference of {{ size_reference|int }}
+          so the gap between 10 and 30 counts more than between 90 and 110</td></tr>
+      <tr><td>Field strength</td><td class="num right">{{ (weights.strength * 100)|int }}%</td>
+        <td class="muted">Mean Elo of registered teams that have one, needing at least
+          {{ min_rated }} rated teams</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    When field strength is unknown, the weights are <strong>renormalised over what is known</strong>
+    rather than scoring the event as weak. Otherwise the column would measure how much data we
+    happen to have, and every upcoming event would sink below every past one for reasons unrelated
+    to importance. A <span class="mono">·</span> in the strength slot means exactly that.
+  </p>
+
+  <h2 class="warn">Known problem with the strength term</h2>
+  <p class="note">
+    The Elo-to-score mapping runs <span class="mono">{{ floor|int }} → 0</span> and
+    <span class="mono">{{ ceiling|int }} → 100</span>. <strong>Those numbers were chosen, not
+    derived, and measuring shows they are badly calibrated.</strong>
+  </p>
+  {% if field_mean_spread %}
+  <table>
+    <thead><tr><th>Aggregate over {{ rated_events }} rated fields</th><th class="right">Min</th>
+      <th class="right">Median</th><th class="right">Max</th><th class="right">Span</th>
+      <th class="right">Of the {{ (ceiling - floor)|int }}-point scale</th></tr></thead>
+    <tbody>
+      <tr><td>Mean Elo of a field <span class="muted">(used now)</span></td>
+        <td class="num right">{{ field_mean_spread.min }}</td><td class="num right">{{ field_mean_spread.median }}</td>
+        <td class="num right">{{ field_mean_spread.max }}</td><td class="num right">{{ field_mean_spread.span }}</td>
+        <td class="num right warn">{{ ((field_mean_spread.span / (ceiling - floor)) * 100)|round|int }}%</td></tr>
+      <tr><td>Mean Elo of a field's top 10</td>
+        <td class="num right">{{ field_top_spread.min }}</td><td class="num right">{{ field_top_spread.median }}</td>
+        <td class="num right">{{ field_top_spread.max }}</td><td class="num right">{{ field_top_spread.span }}</td>
+        <td class="num right">{{ ((field_top_spread.span / (ceiling - floor)) * 100)|round|int }}%</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Every field mean in your catalog falls between {{ field_mean_spread.min }} and
+    {{ field_mean_spread.max }} — a {{ field_mean_spread.span }}-point span inside a
+    {{ (ceiling - floor)|int }}-point scale. So the strength component can only ever produce values
+    in a narrow band, and contributes close to a constant for every event. It is currently a poor
+    discriminator, and that is a calibration fault, not a property of the data.
+  </p>
+  <p class="note">
+    The cause is that Elo is zero-sum: a large field contains its weak teams alongside its strong
+    ones, so the <em>mean</em> regresses to {{ elo_mean }} no matter who attends. Ranking by the
+    top of a field instead gives {{ ((field_top_spread.span / field_mean_spread.span))|round(1) }}×
+    the spread, and calibrating the endpoints to the observed range rather than to round numbers
+    would use the whole scale.
+  </p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Smaller rules worth knowing</h2>
+  <table>
+    <thead><tr><th>Number</th><th>How it works</th></tr></thead>
+    <tbody>
+      <tr><td>Record and win rate</td><td class="muted">Only from matches with both scores recorded.
+        A team with none shows “—”, never 0–0–0, which would read as “played and never won”.</td></tr>
+      <tr><td>Team OPR/DPR/CCWM in the teams table</td><td class="muted">Averaged across that team's
+        events, not their best — OPR rests on about five matches per event, so a best-of mostly
+        measures which event was noisiest in their favour.</td></tr>
+      <tr><td>Allies</td><td class="muted">Sorted by elimination partnerships first. A qualification
+        partner is a random draw; an elimination partner was chosen in alliance selection. The
+        record shown is the pair's record in matches they played together.</td></tr>
+      <tr><td>Event grade</td><td class="muted">Derived from the grades of registered teams, never
+        from the event name — checked against known rosters, names were wrong or silent about 45%
+        of the time. Called for a grade at {{ (grade_majority * 100)|int }}% or more of one grade,
+        otherwise “Blended”.</td></tr>
+      <tr><td>Match dates</td><td class="muted">Exact where the schedule has a time. Every
+        elimination match lacks one, so those show the event's date range in italics.</td></tr>
+      <tr><td>Regions</td><td class="muted">The US is split into seven regions and everywhere else
+        grouped by country, mirroring who a team actually competes against.</td></tr>
+      <tr><td>Elimination bracket</td><td class="muted">Derived from matches, never stored, so it
+        cannot disagree with them. Series are decided by which set of teams won more games, not by
+        alliance colour.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p class="note">
+  {{ rated_events }} of {{ total_events }} events currently have enough rated teams for the
+  strength term to fire at all.
+</p>
+{% endblock %}

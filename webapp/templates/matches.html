@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Matches · VEX Tracker{% endblock %}
+{% block heading %}Matches{% endblock %}
+{% block subheading %}
+  {{ total }} match{{ '' if total == 1 else 'es' }}{% if chosen %} in {{ events.get(chosen, {}).get('name', chosen) }}{% endif %}
+  {%- if pages > 1 %} · page {{ page }} of {{ pages }}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <h2>Add a match</h2>
+  {% if events %}
+  <form method="post" action="/matches/new" class="form">
+    <label>Event
+      {# Free text with a datalist of events that have happened: a plain select
+         over every event in the season was ~100KB of <option>s on every load,
+         and the typed value still accepts any event key. #}
+      <input name="event" list="event-options" class="mono" required
+             value="{{ chosen or '' }}" placeholder="RE-V5RC-26-4244">
+      <datalist id="event-options">
+        {% for key, event in addable.items()|sort(attribute='1.start') %}
+        <option value="{{ key }}">{{ event.name[:60] }}</option>
+        {% endfor %}
+      </datalist>
+    </label>
+    <label>Round
+      <select name="round">
+        {% for slug, label, _ in rounds %}<option value="{{ slug }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Instance<input name="instance" type="number" value="1" min="1"></label>
+    <label>Number<input name="number" type="number" value="1" min="1"></label>
+    <label>Red teams<input name="red" class="mono" placeholder="929U, 1234A"></label>
+    <label>Blue teams<input name="blue" class="mono" placeholder="55B, 7C"></label>
+    <label>Red score<input name="red_score" type="number" placeholder="optional"></label>
+    <label>Blue score<input name="blue_score" type="number" placeholder="optional"></label>
+    <label>Video
+      <select name="video_file">
+        <option value="">— none —</option>
+        {% for video in videos %}<option value="{{ video.name }}">{{ video.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Start frame<input name="start_frame" type="number" placeholder="optional"></label>
+    <label>End frame<input name="end_frame" type="number" placeholder="optional"></label>
+    <div class="form-actions"><button type="submit">Add match</button></div>
+  </form>
+  <p class="note">
+    Teams are comma-separated and are created automatically the first time they appear, so there is
+    no separate step for registering one. Scores are optional — leave them blank rather than
+    guessing, since a blank is read as “unknown” and a zero is not.
+  </p>
+  {% else %}
+  <p class="note">Create an <a href="/events">event</a> first — a match belongs to one.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>All matches</h2>
+  <div class="row" style="margin-top:0">
+    <form method="get" action="/matches" class="row" style="margin-top:0">
+      <select name="event" onchange="this.form.submit()">
+        <option value="">All events</option>
+        {# Only events that actually have matches: listing all 686 added ~160KB
+           of <option>s to a page that might be showing four rows. #}
+        {% for key, event in selectable.items()|sort(attribute='1.start') %}
+        <option value="{{ key }}" {{ 'selected' if key == chosen }}>{{ event.name[:70] }}</option>
+        {% endfor %}
+      </select>
+      <label class="note" style="flex-direction:row;gap:6px;align-items:center">
+        <input type="checkbox" name="footage" value="1" onchange="this.form.submit()"
+               {{ 'checked' if footage_only }}> with footage only
+      </label>
+    </form>
+  </div>
+  {% if rows %}
+  <table>
+    <thead><tr><th>Date</th><th>Event</th><th>Match</th><th>Red</th><th>Blue</th>
+      <th class="right">Score</th><th>Footage</th><th>Analysis</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      {% set red = row.match.alliances.red %}{% set blue = row.match.alliances.blue %}
+      <tr>
+        <td class="num muted{{ '' if row.when.exact else ' approx' }}"
+            {% if not row.when.exact %}title="No scheduled time — eliminations are not pre-scheduled, so these are the event's dates"{% endif %}>
+          {{ row.when.date or '—' }}{% if row.when.time %} {{ row.when.time }}{% endif %}
+        </td>
+        <td class="muted"><a href="/event/{{ row.match.event }}"
+            title="{{ events.get(row.match.event, {}).get('name', row.match.event) }}">
+            {{ events.get(row.match.event, {}).get('name', row.match.event)[:34] }}</a></td>
+        <td><a href="/match/{{ row.match.key }}"><strong>{{ row.match.name }}</strong></a></td>
+        <td class="num">{% for t in red.teams %}<a href="/team/{{ t }}" class="side red">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not red.teams }}</td>
+        <td class="num">{% for t in blue.teams %}<a href="/team/{{ t }}" class="side blue">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not blue.teams }}</td>
+        <td class="num right">{% if red.score is not none and blue.score is not none %}{{ red.score }}–{{ blue.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted mono">{% if row.match.video and row.match.video.file %}{{ row.match.video.start_frame }}–{{ row.match.video.end_frame }}{% else %}—{% endif %}</td>
+        <td>
+          {% if row.status.analysed %}<span class="tag ok">analysed</span>
+          {% elif row.status.ready %}<span class="tag saved">ready to run</span>
+          {% elif row.status.video %}<span class="tag missing">needs setup</span>
+          {% else %}<span class="tag">no footage</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if pages > 1 %}
+  {% set base = '/matches?' ~ ('event=' ~ chosen ~ '&' if chosen else '') ~ ('footage=1&' if footage_only else '') %}
+  <div class="row">
+    {% if page > 1 %}<a href="{{ base }}page={{ page - 1 }}"><button type="button" class="secondary">← Previous</button></a>{% endif %}
+    <span class="note">page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a href="{{ base }}page={{ page + 1 }}"><button type="button" class="secondary">Next →</button></a>{% endif %}
+  </div>
+  {% endif %}
+  {% else %}<p class="note">No matches recorded yet.</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Teams · VEX Tracker{% endblock %}
+{% block heading %}Teams{% endblock %}
+{% block subheading %}
+  {{ total }} team{{ '' if total == 1 else 's' }} across
+  {{ event_count }} event{{ '' if event_count == 1 else 's' }} and {{ match_count }} matches
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <div class="row" style="margin-top:0">
+  <form method="get" action="/" class="row" style="margin-top:0;width:100%">
+    <input id="filter" name="q" class="search mono" type="search"
+           placeholder="Search by team number, name or organization"
+           value="{{ query or '' }}" autocomplete="off" autofocus>
+    <select name="grade" onchange="this.form.submit()">
+      <option value="">HS and MS</option>
+      {% for g, n in grade_counts.items() %}
+      <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
+      {% endfor %}
+    </select>
+    <select name="region" onchange="this.form.submit()">
+      <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
+      {% for group, count in region_counts.items() %}
+      <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+    <button type="submit">Search</button>
+    {% if query or region %}<a href="/?region={{ all_regions }}"><button type="button" class="secondary">Clear</button></a>{% endif %}
+    <span class="note" id="filter-count"></span>
+  </form>
+  </div>
+
+  {% if rows %}
+  <table id="teams-table">
+    <thead>
+      <tr>
+        {% for key, label, numeric in columns %}
+        {# Clicking the active column flips direction; a new column starts from
+           its own natural default rather than inheriting the last one. #}
+        {% set flipped = ('asc' if dir == 'desc' else 'desc') if sort == key else ('desc' if numeric else 'asc') %}
+        <th class="{{ 'right' if numeric }} sortable {{ 'sorted' if sort == key }}">
+          <a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}{% if region %}region={{ region|urlencode }}&amp;{% endif %}{% if grade %}grade={{ grade|urlencode }}&amp;{% endif %}sort={{ key }}&amp;dir={{ flipped }}">
+            {{ label }}<span class="arrow">{{ ('▾' if dir == 'desc' else '▴') if sort == key else '' }}</span>
+          </a>
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr data-search="{{ (row.number ~ ' ' ~ (row.name or '') ~ ' ' ~ (row.organization or '') ~ ' ' ~ (row.location or ''))|lower }}">
+        <td class="num"><a href="/team/{{ row.number }}"><strong>{{ row.number }}</strong></a></td>
+        <td>{{ row.name or '—' }}</td>
+        <td class="muted">{{ row.organization or '—' }}</td>
+        <td class="muted">{{ row.location or '—' }}</td>
+        <td class="muted">{{ 'HS' if row.grade == 'High School' else ('MS' if row.grade == 'Middle School' else (row.grade or '—')) }}</td>
+        <td class="num right">{{ row.matches }}</td>
+        <td class="num right">
+          {% if row.scored_matches %}{{ row.wins }}–{{ row.losses }}–{{ row.ties }}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="num right">{{ '%.0f%%'|format(row.win_rate * 100) if row.win_rate is not none else '—' }}</td>
+        <td class="num right">{{ row.ccwm if row.ccwm is not none else '—' }}</td>
+        <td class="num right">{{ row.opr if row.opr is not none else '—' }}</td>
+        <td class="num right">{{ row.dpr if row.dpr is not none else '—' }}</td>
+        <td class="num right">{{ row.elo|round|int if row.elo is not none else '—' }}</td>
+        <td class="num right">{{ row.with_video }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note" id="empty-filter" hidden>No team matches that filter.</p>
+  {% if defaulted %}
+  <p class="note">
+    Showing <strong>{{ region }}</strong> by default, since that is who you are most likely to
+    face. Pick <em>All regions</em> to widen.
+  </p>
+  {% endif %}
+  {% if matched > limit %}
+  <p class="note">
+    Showing {{ limit }} of {{ matched }} matching team{{ '' if matched == 1 else 's' }}{% if region %}
+    in {{ region }}{% endif %}, sorted by {{ sort }}. Narrow the search to see the rest.
+  </p>
+  {% elif not query and not region and total > limit %}
+  <p class="note">Showing {{ limit }} of {{ total }} teams, sorted by {{ sort }}. Search to find any other.</p>
+  {% endif %}
+  {% else %}
+  {% if query %}
+  <p class="note">No team matches “{{ query }}”{% if region %} in {{ region }}{% endif %}. <a href="/">Show all teams.</a></p>
+  {% else %}
+  <p class="note">
+    No teams yet. Import an event, or add a match by hand —
+    teams appear as soon as they are named in an alliance.
+  </p>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% if rows %}
+<p class="note">
+  Sorting applies to every matching team before the list is cut to {{ limit }}, so the top of a
+  sorted column is the real top and not just the best of what was already on screen.
+  Teams with no value for the sorted column are kept last in both directions.
+  Record comes only from matches with scores recorded, so a team with none shows “—”
+  rather than a 0–0–0 that would read as “played and never won”.
+</p>
+<p class="note">
+  <strong>CCWM, OPR and DPR</strong> are least-squares estimates of what a team contributes
+  regardless of its partners, averaged over that team's events. They are only strictly
+  comparable <em>within</em> an event — teams who never shared a match were solved in separate
+  systems — so treat the column as a guide and the per-event figures on a team's page as the
+  real numbers. <strong>Elo</strong> does carry across events that share teams, but only within
+  a connected pool; 76% of rated teams are in the largest.
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Refines the rows the server already sent. At season scale the full table is
+// far too large to ship, so the form above is the real search and this is only
+// instant feedback within a page of results.
+const box = document.getElementById('filter');
+const rows = [...document.querySelectorAll('#teams-table tbody tr')];
+const count = document.getElementById('filter-count');
+const empty = document.getElementById('empty-filter');
+
+function apply() {
+  const q = box.value.trim().toLowerCase();
+  let shown = 0;
+  for (const row of rows) {
+    const hit = !q || row.dataset.search.includes(q);
+    row.hidden = !hit;
+    if (hit) shown++;
+  }
+  count.textContent = q && shown !== rows.length ? `${shown} of ${rows.length} shown` : '';
+  if (empty) empty.hidden = shown > 0;
+  // Keep the URL shareable without reloading, so a filtered view can be sent on.
+}
+
+if (box) { box.addEventListener('input', apply); apply(); }
+</script>
+{% endblock %}

@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}VEX Tracker{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+<header>
+  <nav class="nav">
+    <a class="brand" href="/">VEX Tracker</a>
+    <a href="/" class="{{ 'on' if section == 'teams' }}">Teams</a>
+    <a href="/matches" class="{{ 'on' if section == 'matches' }}">Matches</a>
+    <a href="/events" class="{{ 'on' if section == 'events' }}">Events</a>
+    <a href="/help" class="{{ 'on' if section == 'help' }}">How it's calculated</a>
+  </nav>
+  <h1>{% block heading %}{% endblock %}</h1>
+  <p class="sub">{% block subheading %}{% endblock %}</p>
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}

@@ -1,0 +1,12 @@
+# Input footage and generated output - large, regenerable, or not ours to version
+videos/
+data/
+training/dataset/
+training/weights/
+runs/
+weights/
+
+__pycache__/
+*.pyc
+.DS_Store
+*.pt

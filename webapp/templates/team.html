@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}{{ team.number }} · VEX Tracker{% endblock %}
+{% block heading %}{{ team.number }}{% if team.name %} <span class="light">{{ team.name }}</span>{% endif %}{% endblock %}
+{% block subheading %}
+  {{ team.organization or 'Organization not recorded' }}
+  {%- if team.location and team.location.city %} · {{ team.location.city }}{% if team.location.region %}, {{ team.location.region }}{% endif %}{% endif %}
+  {%- if team.grade %} · {{ team.grade }}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="tabs">
+  <button class="tab on" data-tab="season">Season</button>
+  <button class="tab" data-tab="matches">Matches ({{ matches|length }})</button>
+  <button class="tab" data-tab="robot">Robot analysis</button>
+  <button class="tab" data-tab="videos">Videos ({{ videos|length }})</button>
+</div>
+
+<section id="tab-season">
+  <div class="panel">
+    <h2>Season</h2>
+    <div class="cards">
+      <div class="card"><span class="k">Matches</span><span class="v">{{ record.matches }}</span></div>
+      <div class="card">
+        <span class="k">Record</span>
+        <span class="v">{% if record.scored_matches %}{{ record.wins }}–{{ record.losses }}–{{ record.ties }}{% else %}—{% endif %}</span>
+        <span class="f">from {{ record.scored_matches }} scored</span>
+      </div>
+      <div class="card">
+        <span class="k">Win rate</span>
+        <span class="v">{{ '%.0f%%'|format(record.win_rate * 100) if record.win_rate is not none else '—' }}</span>
+      </div>
+      <div class="card"><span class="k">Avg for</span><span class="v">{{ record.avg_score if record.avg_score is not none else '—' }}</span></div>
+      <div class="card"><span class="k">Avg against</span><span class="v">{{ record.avg_conceded if record.avg_conceded is not none else '—' }}</span></div>
+      <div class="card"><span class="k">Events</span><span class="v">{{ record.events|length }}</span></div>
+      <div class="card"><span class="k">With footage</span><span class="v">{{ videos|length }}</span></div>
+      <div class="card"><span class="k">Analysed</span><span class="v">{{ analysed_count }}</span></div>
+    </div>
+    {% if not record.scored_matches %}
+    <p class="note">
+      No scores have been entered for this team's matches, so record and averages are blank
+      rather than zero. Add them on a match page.
+    </p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Power ratings</h2>
+    {% if rated %}
+    <div class="cards">
+      <div class="card"><span class="k">Avg CCWM</span><span class="v">{{ season.ccwm if season.ccwm is not none else '—' }}</span><span class="f">over {{ season.rated_events }} event{{ '' if season.rated_events == 1 else 's' }}</span></div>
+      <div class="card"><span class="k">Avg OPR</span><span class="v">{{ season.opr if season.opr is not none else '—' }}</span></div>
+      <div class="card"><span class="k">Avg DPR</span><span class="v">{{ season.dpr if season.dpr is not none else '—' }}</span><span class="f">lower is better</span></div>
+      <div class="card"><span class="k">Elo</span><span class="v">{{ elo.elo|round|int if elo else '—' }}</span><span class="f">{% if elo %}{{ elo.matches }} matches{% endif %}</span></div>
+    </div>
+
+    <table>
+      <thead><tr><th>Event</th><th class="right">CCWM</th><th class="right">OPR</th>
+        <th class="right">DPR</th><th class="right">Alliances</th><th>Fit</th></tr></thead>
+      <tbody>
+        {% for r in rated %}
+        <tr>
+          <td><a href="/event/{{ r.event.key }}">{{ (r.event.name or r.event.key)[:52] }}</a></td>
+          <td class="num right"><strong>{{ r.ccwm }}</strong></td>
+          <td class="num right">{{ r.opr }}</td>
+          <td class="num right">{{ r.dpr }}</td>
+          <td class="num right">{{ r.alliance_rows }}</td>
+          <td class="muted">R²&nbsp;{{ r.quality.r2 }} · ±{{ r.quality.residual_rms }}&nbsp;pts</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="note">
+      <strong>OPR</strong> is what this team contributed to its own alliance's score,
+      <strong>DPR</strong> what it allowed the opposing alliance, and <strong>CCWM</strong> the
+      difference. All three are solved across every alliance at that event at once, so they do
+      not depend on who the team was paired with — which win rate and average score both do.
+    </p>
+    <p class="note">
+      Read them as rankings, not quantities. The fit column is honest about the precision:
+      these explain roughly a third of score variance, and each team's figure rests on about
+      five alliances. DPR can even come out slightly negative, which is the least-squares fit
+      overshooting rather than a team causing negative points.
+    </p>
+    <p class="note">
+      A team playing pure defense suppresses opponents instead of scoring, so it shows as low
+      OPR and low DPR. That is why CCWM is the column to lead with — at the Mall of America
+      event the undefeated winner ranked 6th on OPR and 1st on CCWM.
+      {% if elo and elo.pool is not none and elo.pool > 0 %}
+      This team's Elo sits in a smaller pool of events that share no teams with the main one,
+      so it is not comparable to Elo elsewhere in the table.
+      {% endif %}
+    </p>
+    {% else %}
+    <p class="note">No scored matches yet, so there is nothing to solve.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Allies</h2>
+    {% if partners %}
+    <table>
+      <thead><tr><th>Team</th><th>Name</th><th class="right">Together</th>
+        <th class="right">Eliminations</th><th class="right">Record</th>
+        <th class="right">Win rate</th></tr></thead>
+      <tbody>
+        {% for p in partners[:12] %}
+        <tr>
+          <td class="num"><a href="/team/{{ p.team }}"><strong>{{ p.team }}</strong></a></td>
+          <td class="muted">{{ all_teams.get(p.team, {}).get('name') or '—' }}</td>
+          <td class="num right">{{ p.matches }}</td>
+          <td class="num right">{% if p.eliminations %}<strong>{{ p.eliminations }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num right">{% if p.scored_matches %}{{ p.wins }}–{{ p.losses }}–{{ p.ties }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num right">{{ '%.0f%%'|format(p.win_rate * 100) if p.win_rate is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if partners|length > 12 %}
+    <p class="note">Top 12 of {{ partners|length }} distinct allies.</p>
+    {% endif %}
+    <p class="note">
+      Sorted by elimination partnerships first, then by how often they played together.
+      That order is the point: a <strong>qualification</strong> partner is a random draw, so
+      playing with someone repeatedly says nothing about either team. An
+      <strong>elimination</strong> partner was chosen in alliance selection — so even one
+      says something, because it is either who picked them or who they picked.
+    </p>
+    <p class="note">
+      The record is the pair's record in the matches they played <em>together</em>, which is the
+      only record that describes the pairing rather than either team on its own.
+    </p>
+    {% else %}
+    <p class="note">No matches recorded, so there are no allies to show.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Events</h2>
+    {% if record.events %}
+    <div class="list">
+      {% for key in record.events %}
+      {% set event = events.get(key) %}
+      <a class="item" href="/event/{{ key }}">
+        <span class="name">{{ event.name if event else key }}</span>
+        <span class="meta">{{ event.start or '' if event }}</span>
+        <span class="tag">{{ event.sku or 'no SKU' if event else '' }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}<p class="note">No events recorded.</p>{% endif %}
+  </div>
+</section>
+
+<section id="tab-matches" hidden>
+  <div class="panel">
+    <h2>Matches</h2>
+    {% if matches %}
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Event</th><th>Match</th><th>Side</th><th>Partners</th><th>Opponents</th>
+        <th class="right">Score</th><th class="right">Result</th><th>Analysis</th>
+      </tr></thead>
+      <tbody>
+        {% for row in matches %}
+        <tr>
+          {# An approximate date is shown in italics with the reason on hover, so a
+             match dated from its event is not mistaken for a scheduled time. #}
+          <td class="num muted{{ '' if row.when.exact else ' approx' }}"
+              {% if not row.when.exact %}title="No scheduled time for this match — showing the event's dates"{% endif %}>
+            {{ row.when.date or '—' }}
+            {%- if row.when.time %} <span class="muted">{{ row.when.time }}</span>{% endif %}
+          </td>
+          <td class="muted">
+            <a href="/event/{{ row.match.event }}"
+               title="{{ events.get(row.match.event, {}).get('name', row.match.event) }}">
+              {{ events.get(row.match.event, {}).get('name', row.match.event)[:38] }}</a>
+          </td>
+          <td><a href="/match/{{ row.match.key }}"><strong>{{ row.match.name }}</strong></a></td>
+          <td><span class="side {{ row.side }}">{{ row.side or '—' }}</span></td>
+          <td class="num">{% for t in row.partners %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not row.partners }}</td>
+          <td class="num">{% for t in row.opponents %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not row.opponents }}</td>
+          <td class="num right">{% if row.score is not none %}{{ row.score }}–{{ row.against }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num right">{% if row.outcome %}<span class="res {{ row.outcome }}">{{ row.outcome }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if row.status.analysed %}<span class="tag ok">analysed</span>
+            {% elif row.status.ready %}<span class="tag saved">ready to run</span>
+            {% elif row.status.video %}<span class="tag missing">needs setup</span>
+            {% else %}<span class="tag">no footage</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="note">This team has no matches recorded. <a href="/matches">Add one.</a></p>
+    {% endif %}
+  </div>
+</section>
+
+<section id="tab-robot" hidden>
+  <div class="panel">
+    <h2>Robot analysis</h2>
+    <p class="note">
+      Nothing here yet, and the reason is worth stating plainly rather than filling the space
+      with numbers that do not mean what they appear to.
+    </p>
+    <p class="note">
+      Tracking produces four anonymous tracks per match — <span class="mono">robot 0</span> through
+      <span class="mono">robot 3</span> — and nothing in the video says which one is
+      <span class="mono">{{ team.number }}</span>. Team plates measure about 17 pixels tall in this
+      footage, so reading them is out of reach. Attribution has to come from the match schedule
+      plus each robot's starting tile, which is not built.
+    </p>
+    <p class="note">
+      Until it is, per-robot measurements — distance travelled, time in each zone, contact events,
+      build-style clustering — live on the
+      {% if matches %}<a href="/match/{{ matches[0].match.key }}">match pages</a>{% else %}match pages{% endif %},
+      unattributed. They are deliberately not rolled up here, because a season average over tracks
+      that may belong to the opposing alliance would be worse than no average at all.
+    </p>
+  </div>
+</section>
+
+<section id="tab-videos" hidden>
+  <div class="panel">
+    <h2>Videos</h2>
+    {% if videos %}
+    <div class="list">
+      {% for row in videos %}
+      {# A div rather than a wrapping <a>: the row needs two destinations, and a
+         link inside a link is invalid HTML that browsers silently unnest. #}
+      <div class="item">
+        <span class="name">
+          <a href="/match/{{ row.match.key }}"><strong>{{ row.match.name }}</strong></a>
+          <a class="muted" href="/event/{{ row.match.event }}"
+             title="{{ events.get(row.match.event, {}).get('name', '') }}">
+            {{ events.get(row.match.event, {}).get('name', '')[:44] }}</a>
+        </span>
+        <span class="meta mono">{{ row.when.date or '' }}</span>
+        <span class="meta mono">{{ row.match.video.file }}</span>
+        <span class="meta">frames {{ row.match.video.start_frame }}–{{ row.match.video.end_frame }}</span>
+        {% if row.status.analysed %}<span class="tag ok">analysed</span>{% else %}<span class="tag missing">not analysed</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="note">
+      No footage linked to this team's matches. Link a video file and frame range on a match page;
+      automatic scraping is not built yet.
+    </p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const tabs = [...document.querySelectorAll('.tab')];
+tabs.forEach(tab => tab.addEventListener('click', () => {
+  tabs.forEach(t => t.classList.toggle('on', t === tab));
+  for (const t of tabs) document.getElementById('tab-' + t.dataset.tab).hidden = t !== tab;
+  history.replaceState(null, '', '#' + tab.dataset.tab);
+}));
+// Deep links, so a "look at their videos" link lands on the right tab.
+const wanted = tabs.find(t => '#' + t.dataset.tab === location.hash);
+if (wanted) wanted.click();
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VEX Match Analysis</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <nav class="nav">
+    <a class="brand" href="/">VEX Tracker</a>
+    <a href="/">Teams</a>
+    <a href="/matches">Matches</a>
+    <a href="/events">Events</a>
+    <a href="/help">How it's calculated</a>
+    <a class="on" href="/workspace">Workspace</a>
+  </nav>
+  <h1>Workspace</h1>
+  <p class="sub">Set up and process a segment: robot tracking and bird's-eye path tracing</p>
+</header>
+
+<main>
+  <section class="panel" id="setup">
+    <h2>1 &middot; Choose a video</h2>
+    <div id="video-list" class="list">Loading&hellip;</div>
+
+    <h2>2 &middot; Choose a match</h2>
+    <div id="segment-list" class="list muted">Select a video first.</div>
+
+    <h2>3 &middot; Set up this match</h2>
+    <div class="row" id="setup-buttons">
+      <button id="field-open" class="status pending">Select field</button>
+      <button id="seed-open" class="status pending">Select robots</button>
+    </div>
+
+    <div class="row">
+      <button id="start" disabled>Start processing</button>
+      <button id="reprocess" class="secondary hidden">Reprocess</button>
+      <span id="setup-note" class="note"></span>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="field-panel">
+    <h2>Select the field</h2>
+    <p class="note">
+      Drag the four corners onto the field&rsquo;s floor corners, then line the rings up with
+      the real goals &mdash; easier and more accurate than judging faint tile seams.
+      <strong>Then press Rotate origin until the red rings sit on the actual red goals.</strong>
+      That is what tells the system which alliance is which; get it wrong and every point
+      is credited to the opposing team. Yellow rings are neutral goals, white is the tall
+      centre goal, and the diamond is the Midfield.
+    </p>
+    <div class="seed-stage">
+      <canvas id="field-canvas"></canvas>
+    </div>
+    <div class="row">
+      <button id="field-save">Save field</button>
+      <button id="field-rotate" class="secondary">Rotate origin</button>
+      <button id="field-reset" class="secondary">Reset corners</button>
+      <button id="field-cancel" class="secondary">Cancel</button>
+      <span id="field-note" class="note"></span>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="seed-panel">
+    <h2>Mark the robots</h2>
+    <p class="note">
+      Drag a box around each robot. Motion detection cannot see a robot that is
+      holding still, so correcting these fixes the start of the match &mdash; and every
+      box you draw becomes a training label.
+    </p>
+    <div class="seed-stage">
+      <canvas id="seed-canvas"></canvas>
+    </div>
+    <div class="row">
+      <button id="seed-save">Save and use these</button>
+      <button id="seed-clear" class="secondary">Clear all</button>
+      <button id="seed-cancel" class="secondary">Cancel</button>
+      <span id="seed-note" class="note"></span>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="progress-panel">
+    <h2>Processing</h2>
+    <div class="bar"><div class="bar-fill" id="bar"></div></div>
+    <div class="row">
+      <span id="stage-label">Starting</span>
+      <span id="stage-pct" class="mono">0%</span>
+    </div>
+    <pre id="log" class="log"></pre>
+  </section>
+
+  <section class="panel hidden" id="result-panel">
+    <h2>Result</h2>
+    <p id="result-note" class="note"></p>
+    <video id="result-video" controls preload="metadata"></video>
+    <div class="row">
+      <a id="paths-link" href="#" target="_blank">Bird's-eye path plot</a>
+      <a id="seed-link" href="#" target="_blank">Seed frame</a>
+    </div>
+    <div id="summary"></div>
+    <div class="row"><button id="again">Process another match</button></div>
+  </section>
+
+  <section class="panel hidden" id="error-panel">
+    <h2>Failed</h2>
+    <pre id="error-text" class="log"></pre>
+    <div class="row"><button id="retry">Back</button></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

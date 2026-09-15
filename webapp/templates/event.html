@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}{{ event.name[:40] }} · VEX Tracker{% endblock %}
+{% block heading %}{{ event.name }}{% endblock %}
+{% block subheading %}
+  <span class="mono">{{ event.sku or event.key }}</span> ·
+  {{ event.start or '?' }}{% if event.end and event.end != event.start %} – {{ event.end }}{% endif %}
+  {%- if location %} · {{ location }}{% endif %}
+  {%- if event.level %} · {{ event.level }}{% endif %}
+  {%- if grade %} · {{ grade }}{% endif %}
+  <span class="tag state-{{ status }}">{{ status }}</span>
+{% endblock %}
+
+{% block content %}
+
+{% if champion or finalist %}
+<div class="panel">
+  <h2>Result</h2>
+  <div class="cards">
+    <div class="card">
+      <span class="k">Champions</span>
+      <span class="v">{% for t in champion %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not champion }}</span>
+    </div>
+    <div class="card">
+      <span class="k">Finalists</span>
+      <span class="v">{% for t in finalist %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not finalist }}</span>
+    </div>
+    <div class="card"><span class="k">Matches</span><span class="v">{{ match_count }}</span><span class="f">{{ scored }} scored</span></div>
+    <div class="card"><span class="k">Footage</span><span class="v">{{ with_footage }}</span><span class="f">linked here</span></div>
+  </div>
+  <div class="row">
+    <a href="/matches?event={{ event.key }}"><button type="button">All {{ match_count }} matches →</button></a>
+    {% if with_footage %}
+    <a href="/matches?event={{ event.key }}&amp;footage=1"><button type="button" class="secondary">{{ with_footage }} with footage →</button></a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Elimination bracket</h2>
+  {% if bracket.has_eliminations %}
+  <div class="bracket">
+    {% for round in bracket.rounds %}
+    <div class="bracket-round">
+      <div class="bracket-label">{{ round.label }}</div>
+      {% for slot in round.slots %}
+      <div class="slot{{ ' unplayed' if not slot.scored }}">
+        {% for side in ('red', 'blue') %}
+        {% set teams = slot.red if side == 'red' else slot.blue %}
+        {% set wins = slot.red_wins if side == 'red' else slot.blue_wins %}
+        <div class="slot-side {{ side }}{{ ' won' if slot.winner == side }}">
+          <span class="slot-teams">{% for t in teams %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not teams }}</span>
+          <span class="slot-score">{{ wins }}</span>
+        </div>
+        {% endfor %}
+        <div class="slot-games">
+          {% for m in slot.matches %}
+          <a href="/match/{{ m.key }}" title="{{ m.name }}">{{ m.alliances.red.score
+            if m.alliances.red.score is not none else '·' }}–{{ m.alliances.blue.score
+            if m.alliances.blue.score is not none else '·' }}</a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="note">
+    {{ bracket.slots }} slots over {{ bracket.matches }} matches. The number beside each alliance is
+    games won in that series, and each score links to that match. Series are decided by which set of
+    teams won more games, not by alliance colour — nothing guarantees an alliance keeps its colour
+    across a best-of-three.
+  </p>
+  {% else %}
+  <p class="note">
+    <strong>This event ran no elimination matches.</strong>
+    {% if match_count %}It has {{ match_count }} match{{ '' if match_count == 1 else 'es' }}, all
+    qualification — which is normal for a league night, a scrimmage, or an event that was cancelled
+    before eliminations.{% else %}No matches have been recorded for it at all.{% endif %}
+  </p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Awards</h2>
+  {% if awards %}
+  <table>
+    <thead><tr><th>Award</th><th>Winner</th></tr></thead>
+    <tbody>
+      {% for award in awards %}
+      <tr>
+        <td{% if award.title and award.title.startswith(highlights) %} class="highlight"{% endif %}>{{ award.title }}</td>
+        <td class="num">
+          {% for t in award.winners %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}
+          {%- if not award.winners %}<span class="muted">not awarded to a team</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% elif status == 'upcoming' %}
+  <p class="note">This event has not happened yet, so no awards have been given.</p>
+  {% else %}
+  <p class="note">No awards recorded for this event.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Qualification rankings</h2>
+  {% if rankings %}
+  <table>
+    <thead><tr><th class="right">Rank</th><th>Team</th><th class="right">Record</th>
+      <th class="right">WP</th><th class="right">AP</th><th class="right">SP</th>
+      <th class="right">Avg</th><th class="right">High</th></tr></thead>
+    <tbody>
+      {% for r in rankings[:25] %}
+      <tr>
+        <td class="num right">{{ r.rank }}</td>
+        <td class="num"><a href="/team/{{ r.team }}">{{ r.team }}</a></td>
+        <td class="num right">{{ r.wins }}–{{ r.losses }}–{{ r.ties }}</td>
+        <td class="num right">{{ r.wp }}</td><td class="num right">{{ r.ap }}</td>
+        <td class="num right">{{ r.sp }}</td>
+        <td class="num right">{{ r.average_points }}</td><td class="num right">{{ r.high_score }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if rankings|length > 25 %}<p class="note">Top 25 of {{ rankings|length }}.</p>{% endif %}
+  {% else %}<p class="note">No rankings recorded.</p>{% endif %}
+</div>
+
+<div class="panel">
+  <h2>Skills</h2>
+  {% if skills %}
+  <table>
+    <thead><tr><th class="right">#</th><th>Team</th><th class="right">Driver</th>
+      <th class="right">Programming</th><th class="right">Total</th></tr></thead>
+    <tbody>
+      {% for s in skills[:15] %}
+      <tr>
+        <td class="num right">{{ loop.index }}</td>
+        <td class="num"><a href="/team/{{ s.team }}">{{ s.team }}</a></td>
+        <td class="num right">{{ s.driver if s.driver is not none else '—' }}</td>
+        <td class="num right">{{ s.programming if s.programming is not none else '—' }}</td>
+        <td class="num right"><strong>{{ s.total }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if skills|length > 15 %}<p class="note">Top 15 of {{ skills|length }} teams, ranked by combined score.</p>{% endif %}
+  {% else %}<p class="note">No skills runs recorded.</p>{% endif %}
+</div>
+
+{% if not detail_present and status != 'upcoming' %}
+<p class="note">
+  Awards, rankings and skills have not been imported for this event yet. Run
+  <span class="mono">python -m integrations.vex_events {{ event.sku or event.key }}</span>.
+</p>
+{% endif %}
+{% endblock %}

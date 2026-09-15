@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ match.name }} · VEX Tracker{% endblock %}
+{% block heading %}{{ match.name }}{% endblock %}
+{% block subheading %}
+  {% if when.date %}
+  <span class="mono"{% if not when.exact %} title="No scheduled time for this match — showing the event's dates"{% endif %}>
+    {{ when.date }}{% if when.time %} {{ when.time }}{% endif %}</span>
+  {%- if not when.exact %} <span class="muted">(event dates — eliminations are not pre-scheduled)</span>{% endif %} ·
+  {% endif %}
+  <a href="/event/{{ match.event }}">{{ event.name if event else match.event }}</a>
+  {%- if match.division %} · {{ match.division }}{% endif %} · {{ round_label }}
+  <span class="tag state-{{ event_status }}">{{ event_status }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <h2>Alliances</h2>
+  <form method="post" action="/match/{{ match.key }}/alliances" class="form">
+    <label>Red teams<input name="red" class="mono" value="{{ match.alliances.red.teams|join(', ') }}" placeholder="929U, 1234A"></label>
+    <label>Red score<input name="red_score" type="number" value="{{ match.alliances.red.score if match.alliances.red.score is not none else '' }}"></label>
+    <label>Blue teams<input name="blue" class="mono" value="{{ match.alliances.blue.teams|join(', ') }}" placeholder="55B, 7C"></label>
+    <label>Blue score<input name="blue_score" type="number" value="{{ match.alliances.blue.score if match.alliances.blue.score is not none else '' }}"></label>
+    <div class="form-actions"><button type="submit">Save alliances</button></div>
+  </form>
+  <div class="row">
+    {% for colour in ('red', 'blue') %}
+    <span class="side {{ colour }}">{{ colour }}</span>
+    {% for t in match.alliances[colour].teams %}<a href="/team/{{ t }}" class="mono">{{ t }}</a>{% endfor %}
+    {% if not match.alliances[colour].teams %}<span class="muted">not recorded</span>{% endif %}
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Footage</h2>
+  <form method="post" action="/match/{{ match.key }}/video" class="form">
+    <label>Video file
+      <select name="video_file">
+        <option value="">— none —</option>
+        {% for video in videos %}
+        <option value="{{ video.name }}" {{ 'selected' if match.video and match.video.file == video.name }}>{{ video.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Start frame<input name="start_frame" type="number" value="{{ match.video.start_frame if match.video else '' }}"></label>
+    <label>End frame<input name="end_frame" type="number" value="{{ match.video.end_frame if match.video else '' }}"></label>
+    <label>Source URL<input name="url" value="{{ match.video.url or '' if match.video else '' }}" placeholder="optional — where the stream came from"></label>
+    <div class="form-actions"><button type="submit">Save footage</button></div>
+  </form>
+
+  {% if event_status == 'upcoming' %}
+  <p class="note">
+    This event has not happened yet, so there is no footage to link and any scores shown are
+    placeholders from the schedule rather than results.
+  </p>
+  {% endif %}
+  {% if status.video %}
+  <div class="row">
+    <span class="tag {{ 'ok' if status.field else 'missing' }}">field {{ 'drawn' if status.field else 'not drawn' }}</span>
+    <span class="tag {{ 'ok' if status.robots else 'missing' }}">robots {{ 'marked' if status.robots else 'not marked' }}</span>
+    <a href="{{ workspace_url }}"><button type="button" class="secondary">Set up and run this match</button></a>
+  </div>
+  <p class="note">
+    Setup and processing still live on the workspace page. They are canvas tools that have not
+    moved here yet; the link opens this exact segment rather than making you find it again.
+  </p>
+  {% else %}
+  <p class="note">No footage linked, so there is nothing to analyse. Pick a file and frame range above.</p>
+  {% endif %}
+</div>
+
+{% if status.analysed %}
+<div class="panel">
+  <h2>Analysis</h2>
+  <video controls preload="metadata" src="{{ result.video_url }}"></video>
+  <p class="note">
+    Camera view beside the bird's-eye it produces. Tracks are numbered, not named — see below.
+  </p>
+  {% if result.paths_url %}
+  <h2>Paths</h2>
+  <img src="{{ result.paths_url }}" alt="robot paths" style="width:100%;border-radius:8px;border:1px solid var(--line)">
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Robot analysis</h2>
+  <p class="note">
+    Four tracks, unattributed. Nothing in the video says which track is which team — team plates
+    are about 17 pixels tall in this footage — so these rows are deliberately labelled
+    <span class="mono">track</span> rather than by team number.
+  </p>
+  <table>
+    <thead><tr>
+      <th>Track</th><th class="right">Samples</th><th class="right">Reliable</th>
+      <th class="right">Merged</th><th class="right">Oversized</th><th class="right">Longest run</th>
+      <th class="right">Distance (in)</th><th class="right">Off field</th><th>Quality</th>
+    </tr></thead>
+    <tbody>
+      {% for track, s in (result.summary or {}).items() %}
+      <tr>
+        <td class="num"><strong>track {{ track }}</strong></td>
+        <td class="num right">{{ s.samples }}</td>
+        <td class="num right">{{ s.reliable }}</td>
+        <td class="num right">{{ s.merged }}</td>
+        <td class="num right">{{ s.oversized }}</td>
+        <td class="num right">{{ s.longest_run }}</td>
+        <td class="num right">{{ '%.0f'|format(s.distance_in) if s.distance_in is not none else '—' }}</td>
+        <td class="num right">{{ s.out_of_bounds }}</td>
+        <td>{% if s.suspect %}<span class="tag missing">suspect</span>{% else %}<span class="tag ok">clean</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">
+    “Merged” counts frames where a track's mask had grown to span two touching robots, and
+    “suspect” marks a track with implausible steps or long merged stretches. Distance is
+    accumulated from the floor-plane projection, so a suspect track's distance is inflated by the
+    jumps rather than being a real travel figure — read it alongside the flags, not on its own.
+  </p>
+</div>
+{% elif status.ready %}
+<div class="panel">
+  <h2>Analysis</h2>
+  <p class="note">Field drawn and robots marked, but this segment has not been processed yet.
+    <a href="{{ workspace_url }}">Run it</a> — about fifteen minutes.</p>
+</div>
+{% endif %}
+{% endblock %}
