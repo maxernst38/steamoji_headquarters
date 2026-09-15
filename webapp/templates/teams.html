@@ -8,30 +8,45 @@
 
 {% block content %}
 <div class="panel">
-  <div class="row" style="margin-top:0">
-  <form method="get" action="/" class="row" style="margin-top:0;width:100%">
-    <input id="filter" name="q" class="search mono" type="search"
-           placeholder="Search by team number, name or organization"
-           value="{{ query or '' }}" autocomplete="off" autofocus>
-    <select name="grade" onchange="this.form.submit()">
-      <option value="">HS and MS</option>
-      {% for g, n in grade_counts.items() %}
-      <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
-      {% endfor %}
-    </select>
-    <select name="region" onchange="this.form.submit()">
-      <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
-      {% for group, count in region_counts.items() %}
-      <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
-      {% endfor %}
-    </select>
-    <input type="hidden" name="sort" value="{{ sort }}">
-    <input type="hidden" name="dir" value="{{ dir }}">
-    <button type="submit">Search</button>
-    {% if query or region %}<a href="/?region={{ all_regions }}"><button type="button" class="secondary">Clear</button></a>{% endif %}
-    <span class="note" id="filter-count"></span>
+  {% from "_filters.html" import filter_menu %}
+  <form method="get" action="/" class="filter-form">
+    <div class="row" style="margin-top:0">
+      <input id="filter" name="q" class="search mono" type="search"
+             placeholder="Search by team number, name or organization"
+             value="{{ query or '' }}" autocomplete="off" autofocus>
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <input type="hidden" name="dir" value="{{ dir }}">
+      <button type="submit">Search</button>
+      {% if query or region or grade or org %}<a href="/?region={{ all_regions }}"><button type="button" class="secondary">Clear</button></a>{% endif %}
+      <span class="note" id="filter-count"></span>
+    </div>
+    {% call filter_menu([grade, region, org]|select|list) %}
+      <select name="grade" aria-label="Grade">
+        <option value="">HS and MS</option>
+        {% for g, n in grade_counts.items() %}
+        <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
+        {% endfor %}
+      </select>
+      <select name="region" aria-label="Region">
+        <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
+        {% for group, count in region_counts.items() %}
+        <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+      {% if region %}
+      <select name="org" aria-label="Organization">
+        <option value="">All organizations ({{ org_options|length }})</option>
+        {% for label, count in org_options %}
+        <option value="{{ label }}" {{ 'selected' if label == org }}>{{ label }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <select aria-label="Organization" disabled title="Pick a region to filter by organization">
+        <option>Pick a region first</option>
+      </select>
+      {% endif %}
+    {% endcall %}
   </form>
-  </div>
 
   {% if rows %}
   <table id="teams-table">
@@ -42,7 +57,7 @@
            its own natural default rather than inheriting the last one. #}
         {% set flipped = ('asc' if dir == 'desc' else 'desc') if sort == key else ('desc' if numeric else 'asc') %}
         <th class="{{ 'right' if numeric }} sortable {{ 'sorted' if sort == key }}">
-          <a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}{% if region %}region={{ region|urlencode }}&amp;{% endif %}{% if grade %}grade={{ grade|urlencode }}&amp;{% endif %}sort={{ key }}&amp;dir={{ flipped }}">
+          <a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}region={{ (region or all_regions)|urlencode }}&amp;{% if grade %}grade={{ grade|urlencode }}&amp;{% endif %}{% if org %}org={{ org|urlencode }}&amp;{% endif %}sort={{ key }}&amp;dir={{ flipped }}">
             {{ label }}<span class="arrow">{{ ('▾' if dir == 'desc' else '▴') if sort == key else '' }}</span>
           </a>
         </th>
