@@ -72,59 +72,8 @@
     keeps hand-entered events out of the namespace RobotEvents will use and makes it obvious which
     records still need linking.
   </p>
-<<<<<<< HEAD
-</div>
-
-<div class="panel">
-  <h2>All events</h2>
-  <form method="get" action="/events" class="row" style="margin-top:0">
-    <select name="grade" onchange="this.form.submit()">
-      <option value="">Any grade</option>
-      {% for g, n in grade_counts.items() %}
-      <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
-      {% endfor %}
-    </select>
-    <select name="region" onchange="this.form.submit()">
-      <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
-      {% for group, count in region_counts.items() %}
-      <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
-      {% endfor %}
-    </select>
-    <select name="status" onchange="this.form.submit()">
-      <option value="">Any status</option>
-      {% for state in ('past', 'ongoing', 'upcoming') %}
-      <option value="{{ state }}" {{ 'selected' if chosen == state }}>{{ state }} ({{ tally.get(state, 0) }})</option>
-      {% endfor %}
-    </select>
-    <select name="order" onchange="this.form.submit()">
-      <option value="importance" {{ 'selected' if order == 'importance' }}>Importance</option>
-      <option value="near" {{ 'selected' if order == 'near' }}>Closest to today</option>
-      <option value="date" {{ 'selected' if order == 'date' }}>Chronological</option>
-    </select>
-    <label class="note" style="margin:0">
-      <input type="checkbox" name="webcast" value="1" {{ 'checked' if webcast_only }} onchange="this.form.submit()">
-      Webcast listed ({{ with_webcast }})
-    </label>
-  </form>
-  {% if order == 'importance' %}
-  <p class="note">
-    <strong>Importance</strong> combines what the event is (45%), how many teams are registered
-    (25%) and the Elo of those teams (30%). The three parts are shown beneath the score as
-    <span class="mono">level/size/strength</span>; hover for detail. A
-    <span class="mono">·</span> means no registered team has a rating yet — three weeks into the
-    season that is true of most upcoming events, so the weights are renormalised over what is
-    known rather than scoring an unrated field as a weak one.
-  </p>
-  {% endif %}
-  {% if defaulted %}
-  <p class="note">
-    Showing <strong>{{ region }}</strong> by default. Pick <em>All regions</em> to widen.
-  </p>
-  {% endif %}
-=======
   </div>
   {% set filters = ('q=' ~ query|urlencode ~ '&' if query else '') ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') ~ ('stream=' ~ stream ~ '&' if stream else '') %}
->>>>>>> dev
   {% if rows %}
   <table>
     <thead>
@@ -145,9 +94,7 @@
     <tbody>
       {% for event in rows %}
       <tr>
-        <td><a href="/event/{{ event.key }}"><strong>{{ event.name }}</strong></a>
-          {%- if event.webcast %} <a href="{{ event.webcast.url }}" target="_blank" rel="noopener noreferrer"
-            class="tag" title="Webcast: {{ event.webcast.kind_label }}">▶ {{ event.webcast.kind_label }}</a>{% endif %}</td>
+        <td><a href="/event/{{ event.key }}"><strong>{{ event.name }}</strong></a></td>
         <td class="num muted">{{ event.sku or '—' }}</td>
         {% set imp = event.importance %}
         <td class="num right">
@@ -178,11 +125,7 @@
     </tbody>
   </table>
   {% if pages > 1 %}
-<<<<<<< HEAD
-  {% set base = '/events?' ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('order=' ~ order ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') ~ ('webcast=1&' if webcast_only else '') %}
-=======
   {% set base = '/events?' ~ filters ~ 'sort=' ~ sort ~ '&dir=' ~ dir ~ '&' ~ ('near=1&' if near else '') %}
->>>>>>> dev
   <div class="row">
     {% if page > 1 %}<a href="{{ base }}page={{ page - 1 }}"><button type="button" class="secondary">← Previous</button></a>{% endif %}
     <span class="note">showing {{ rows|length }} of {{ shown }} · page {{ page }} of {{ pages }}</span>

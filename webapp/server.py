@@ -887,21 +887,13 @@ def page_event(key):
     )
 
 
-<<<<<<< HEAD
 def _webcast(event, table=None):
+    """The event's stream link from the scraped webcast table, or None.
+
+    The Stream column, filter and sort all read from this one function.
+    """
     table = webcasts.load_all() if table is None else table
     return webcasts.describe(webcasts.get(event.get("sku") or event.get("key"), table=table), table)
-=======
-def _webcast(event):
-    """The event's stream link as {"url": ...}, or None.
-
-    No link source is connected yet, so every event reads as "No stream". The
-    Stream column, filter and sort are built against this one function: once a
-    source is settled (see the feature/webcast_scraping branch), returning a
-    link here is all they need.
-    """
-    return None
->>>>>>> dev
 
 
 @app.route("/help")
@@ -1100,11 +1092,7 @@ def page_events():
     rows = []
     for event in events.values():
         rows.append({**event, "status": catalog.event_status(event),
-<<<<<<< HEAD
                      "webcast": _webcast(event, webcast_table),
-=======
-                     "webcast": _webcast(event),
->>>>>>> dev
                      "matches": counts.get(event["key"], 0),
                      "region_group": regions.group_of(event.get("location")),
                      "grade": catalog.event_grade(event),
@@ -1158,19 +1146,12 @@ def page_events():
     chosen = request.args.get("status")
     if chosen:
         rows = [r for r in rows if r["status"] == chosen]
-<<<<<<< HEAD
-    with_webcast = sum(1 for r in rows if r["webcast"])
-    webcast_only = request.args.get("webcast") == "1"
-    if webcast_only:
-        rows = [r for r in rows if r["webcast"]]
-=======
     stream_counts = {state: 0 for state in STREAM_STATES}
     for row in rows:
         stream_counts[_stream_state(row)] += 1
     stream = request.args.get("stream") if request.args.get("stream") in STREAM_STATES else ""
     if stream:
         rows = [r for r in rows if _stream_state(r) == stream]
->>>>>>> dev
     tally = {}
     for event in events.values():
         state = catalog.event_status(event)
@@ -1190,14 +1171,9 @@ def page_events():
                            shown=shown, page=page, pages=pages,
                            region=region, region_counts=region_counts,
                            defaulted=defaulted, all_regions=ALL_REGIONS,
-<<<<<<< HEAD
-                           grade=grade, grade_counts=grade_counts, order=order,
-                           webcast_only=webcast_only, with_webcast=with_webcast,
-=======
                            grade=grade, grade_counts=grade_counts,
                            columns=EVENT_COLUMNS, sort=sort, dir=dir_, near=near, query=query,
                            stream=stream, stream_counts=stream_counts, stream_states=STREAM_STATES,
->>>>>>> dev
                            today=_dt.date.today().isoformat())
 
 
