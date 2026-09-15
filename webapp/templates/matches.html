@@ -8,7 +8,35 @@
 
 {% block content %}
 <div class="panel">
-  <h2>Add a match</h2>
+  <h2>All matches</h2>
+  {% from "_filters.html" import filter_menu %}
+  {% set chosen_name = (events.get(chosen) or events.get((chosen or '')|upper) or {}).get('name', chosen) if chosen else '' %}
+  {% set active = [chosen_name[:40], 'With footage only' if footage_only else '']|select|list %}
+  <form method="get" action="/matches" class="filter-form">
+    <div class="row" style="margin-top:0">
+      <input name="q" class="search" type="search" placeholder="Search by team number, event or match name"
+             value="{{ query or '' }}" autocomplete="off">
+      <button type="submit">Search</button>
+      {% if query or active %}<a href="/matches"><button type="button" class="secondary">Clear</button></a>{% endif %}
+    </div>
+    <div class="table-toolbar">
+    {% call filter_menu(active) %}
+      <select name="event" aria-label="Event">
+        <option value="">All events</option>
+        {# Only events that actually have matches: listing all 686 added ~160KB
+           of <option>s to a page that might be showing four rows. #}
+        {% for key, event in selectable.items()|sort(attribute='1.start') %}
+        <option value="{{ key }}" {{ 'selected' if key == chosen }}>{{ event.name[:70] }}</option>
+        {% endfor %}
+      </select>
+      <label class="note">
+        <input type="checkbox" name="footage" value="1" {{ 'checked' if footage_only }}> With footage only
+      </label>
+    {% endcall %}
+    <button type="button" class="add-toggle" data-toggle="add-panel" aria-controls="add-panel" aria-expanded="false">+ Add match</button>
+    </div>
+  </form>
+  <div id="add-panel" class="add-panel" hidden>
   {% if events %}
   <form method="post" action="/matches/new" class="form">
     <label>Event
@@ -52,25 +80,6 @@
   {% else %}
   <p class="note">Create an <a href="/events">event</a> first — a match belongs to one.</p>
   {% endif %}
-</div>
-
-<div class="panel">
-  <h2>All matches</h2>
-  <div class="row" style="margin-top:0">
-    <form method="get" action="/matches" class="row" style="margin-top:0">
-      <select name="event" onchange="this.form.submit()">
-        <option value="">All events</option>
-        {# Only events that actually have matches: listing all 686 added ~160KB
-           of <option>s to a page that might be showing four rows. #}
-        {% for key, event in selectable.items()|sort(attribute='1.start') %}
-        <option value="{{ key }}" {{ 'selected' if key == chosen }}>{{ event.name[:70] }}</option>
-        {% endfor %}
-      </select>
-      <label class="note" style="flex-direction:row;gap:6px;align-items:center">
-        <input type="checkbox" name="footage" value="1" onchange="this.form.submit()"
-               {{ 'checked' if footage_only }}> with footage only
-      </label>
-    </form>
   </div>
   {% if rows %}
   <table>
@@ -103,13 +112,14 @@
     </tbody>
   </table>
   {% if pages > 1 %}
-  {% set base = '/matches?' ~ ('event=' ~ chosen ~ '&' if chosen else '') ~ ('footage=1&' if footage_only else '') %}
+  {% set base = '/matches?' ~ ('q=' ~ query|urlencode ~ '&' if query else '') ~ ('event=' ~ chosen|urlencode ~ '&' if chosen else '') ~ ('footage=1&' if footage_only else '') %}
   <div class="row">
     {% if page > 1 %}<a href="{{ base }}page={{ page - 1 }}"><button type="button" class="secondary">← Previous</button></a>{% endif %}
     <span class="note">page {{ page }} of {{ pages }}</span>
     {% if page < pages %}<a href="{{ base }}page={{ page + 1 }}"><button type="button" class="secondary">Next →</button></a>{% endif %}
   </div>
   {% endif %}
+  {% elif query or active %}<p class="note">No match fits{% if query %} “{{ query }}”{% endif %}{% if active %} with {{ active|join(' · ') }}{% endif %}. <a href="/matches">Show all matches.</a></p>
   {% else %}<p class="note">No matches recorded yet.</p>{% endif %}
 </div>
 {% endblock %}
