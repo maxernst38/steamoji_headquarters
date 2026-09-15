@@ -10,7 +10,52 @@
 
 {% block content %}
 <div class="panel">
-  <h2>Add an event</h2>
+  <h2>All events</h2>
+  {% from "_filters.html" import filter_menu %}
+  {% set active = [grade, region, chosen|capitalize if chosen else '', 'Closest to today' if near else '', 'Stream: ' ~ stream_states[stream] if stream else '']|select|list %}
+  <form method="get" action="/events" class="filter-form">
+    <div class="row" style="margin-top:0">
+      <input name="q" class="search" type="search" placeholder="Search by event name, SKU or city"
+             value="{{ query or '' }}" autocomplete="off">
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <input type="hidden" name="dir" value="{{ dir }}">
+      <button type="submit">Search</button>
+      {% if query or active %}<a href="/events?region={{ all_regions }}"><button type="button" class="secondary">Clear</button></a>{% endif %}
+    </div>
+    <div class="table-toolbar">
+    {% call filter_menu(active) %}
+      <select name="grade" aria-label="Grade">
+        <option value="">Any grade</option>
+        {% for g, n in grade_counts.items() %}
+        <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
+        {% endfor %}
+      </select>
+      <select name="region" aria-label="Region">
+        <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
+        {% for group, count in region_counts.items() %}
+        <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+      <select name="status" aria-label="Status">
+        <option value="">Any status</option>
+        {% for state in ('past', 'ongoing', 'upcoming') %}
+        <option value="{{ state }}" {{ 'selected' if chosen == state }}>{{ state }} ({{ tally.get(state, 0) }})</option>
+        {% endfor %}
+      </select>
+      <label class="note" title="Order by days from today, before or after, overriding the column sort">
+        <input type="checkbox" name="near" value="1" {{ 'checked' if near }}> Closest to today
+      </label>
+      <select name="stream" aria-label="Stream">
+        <option value="">Any stream</option>
+        {% for key, label in stream_states.items() %}
+        <option value="{{ key }}" {{ 'selected' if key == stream }}>{{ label }} ({{ stream_counts[key] }})</option>
+        {% endfor %}
+      </select>
+    {% endcall %}
+    <button type="button" class="add-toggle" data-toggle="add-panel" aria-controls="add-panel" aria-expanded="false">+ Add event</button>
+    </div>
+  </form>
+  <div id="add-panel" class="add-panel" hidden>
   <form method="post" action="/events/new" class="form">
     <label>Name<input name="name" required placeholder="Mall of America Signature Event"></label>
     <label>SKU<input name="sku" class="mono" placeholder="RE-VRC-25-1234"></label>
@@ -27,54 +72,25 @@
     keeps hand-entered events out of the namespace RobotEvents will use and makes it obvious which
     records still need linking.
   </p>
-</div>
-
-<div class="panel">
-  <h2>All events</h2>
-  <form method="get" action="/events" class="row" style="margin-top:0">
-    <select name="grade" onchange="this.form.submit()">
-      <option value="">Any grade</option>
-      {% for g, n in grade_counts.items() %}
-      <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
-      {% endfor %}
-    </select>
-    <select name="region" onchange="this.form.submit()">
-      <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
-      {% for group, count in region_counts.items() %}
-      <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
-      {% endfor %}
-    </select>
-    <select name="status" onchange="this.form.submit()">
-      <option value="">Any status</option>
-      {% for state in ('past', 'ongoing', 'upcoming') %}
-      <option value="{{ state }}" {{ 'selected' if chosen == state }}>{{ state }} ({{ tally.get(state, 0) }})</option>
-      {% endfor %}
-    </select>
-    <select name="order" onchange="this.form.submit()">
-      <option value="importance" {{ 'selected' if order == 'importance' }}>Importance</option>
-      <option value="near" {{ 'selected' if order == 'near' }}>Closest to today</option>
-      <option value="date" {{ 'selected' if order == 'date' }}>Chronological</option>
-    </select>
-  </form>
-  {% if order == 'importance' %}
-  <p class="note">
-    <strong>Importance</strong> combines what the event is (45%), how many teams are registered
-    (25%) and the Elo of those teams (30%). The three parts are shown beneath the score as
-    <span class="mono">level/size/strength</span>; hover for detail. A
-    <span class="mono">·</span> means no registered team has a rating yet — three weeks into the
-    season that is true of most upcoming events, so the weights are renormalised over what is
-    known rather than scoring an unrated field as a weak one.
-  </p>
-  {% endif %}
-  {% if defaulted %}
-  <p class="note">
-    Showing <strong>{{ region }}</strong> by default. Pick <em>All regions</em> to widen.
-  </p>
-  {% endif %}
+  </div>
+  {% set filters = ('q=' ~ query|urlencode ~ '&' if query else '') ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') ~ ('stream=' ~ stream ~ '&' if stream else '') %}
   {% if rows %}
   <table>
-    <thead><tr><th>Event</th><th>SKU</th><th class="right">Importance</th><th>Status</th><th>Grade</th><th>Dates</th><th>Where</th>
-      <th class="right">Matches</th><th>Source</th></tr></thead>
+    <thead>
+      <tr>
+        {% for key, label, numeric in columns %}
+        {# Clicking the active column flips direction; a new column starts from its
+           own natural default. A header click also leaves "closest to today". #}
+        {% set is_sorted = sort == key and not near %}
+        {% set flipped = ('asc' if dir == 'desc' else 'desc') if is_sorted else ('desc' if numeric else 'asc') %}
+        <th class="{{ 'right' if numeric }} sortable {{ 'sorted' if is_sorted }}">
+          <a href="/events?{{ filters }}sort={{ key }}&amp;dir={{ flipped }}">
+            {{ label }}<span class="arrow">{{ ('▾' if dir == 'desc' else '▴') if is_sorted else '' }}</span>
+          </a>
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
     <tbody>
       {% for event in rows %}
       <tr>
@@ -96,19 +112,27 @@
         </td>
         <td class="muted">{{ event.location_label or '—' }}</td>
         <td class="num right">{{ counts.get(event.key, 0) }}</td>
-        <td><span class="tag">{{ event.source }}</span></td>
+        <td>
+          {%- if event.webcast %}
+          <a href="{{ event.webcast.url }}" target="_blank" rel="noopener noreferrer"><button type="button"
+            class="stream-button{{ ' secondary' if event.status == 'upcoming' }}">{{ 'Upcoming' if event.status == 'upcoming' else 'Stream' }}</button></a>
+          {%- else %}
+          <button type="button" class="stream-button secondary" disabled>No stream</button>
+          {%- endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% if pages > 1 %}
-  {% set base = '/events?' ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('order=' ~ order ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') %}
+  {% set base = '/events?' ~ filters ~ 'sort=' ~ sort ~ '&dir=' ~ dir ~ '&' ~ ('near=1&' if near else '') %}
   <div class="row">
     {% if page > 1 %}<a href="{{ base }}page={{ page - 1 }}"><button type="button" class="secondary">← Previous</button></a>{% endif %}
     <span class="note">showing {{ rows|length }} of {{ shown }} · page {{ page }} of {{ pages }}</span>
     {% if page < pages %}<a href="{{ base }}page={{ page + 1 }}"><button type="button" class="secondary">Next →</button></a>{% endif %}
   </div>
   {% endif %}
-  {% else %}<p class="note">No events yet.</p>{% endif %}
+  {% elif query %}<p class="note">No event matches “{{ query }}”{% if region %} in {{ region }}{% endif %}. <a href="/events?region={{ all_regions }}">Show all events.</a></p>
+  {% else %}<p class="note">No events match these filters.</p>{% endif %}
 </div>
 {% endblock %}

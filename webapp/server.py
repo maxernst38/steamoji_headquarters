@@ -682,6 +682,35 @@ def _team_rows(number, matches):
     return rows
 
 
+def _org_key(name):
+    """Organizations compared ignoring case and spacing.
+
+    40 organizations are registered under more than one capitalization
+    ("CROWN POINT HIGH SCHOOL" / "Crown Point High School"). Compared exactly,
+    the filter would split one club's teams across two options.
+    """
+    return " ".join(str(name or "").split()).lower()
+
+
+def _organization_options(rows):
+    """[(label, team count)] for the rows given, busiest first.
+
+    Each group is labelled with its most common spelling, ties going to the
+    alphabetically first, so the label is stable between page loads.
+    """
+    spellings = {}
+    for row in rows:
+        name = " ".join(str(row.get("organization") or "").split())
+        if name:
+            group = spellings.setdefault(_org_key(name), {})
+            group[name] = group.get(name, 0) + 1
+    options = []
+    for group in spellings.values():
+        label = sorted(group.items(), key=lambda item: (-item[1], item[0]))[0][0]
+        options.append((label, sum(group.values())))
+    return sorted(options, key=lambda item: (-item[1], item[0].lower()))
+
+
 @app.route("/")
 def page_teams():
     rows = _attach_ratings(catalog.team_index())
@@ -733,6 +762,16 @@ def page_teams():
         defaulted = False
     if region:
         rows = [r for r in rows if r["region_group"] == region]
+
+    # Offered only once a region is chosen: every region together is ~1,350
+    # organizations, too many for a dropdown. The search box still finds any.
+    org_options = _organization_options(rows) if region else []
+    # A chosen organization with no teams under the current region and grade is
+    # dropped, rather than left filtering the table down to nothing.
+    org_labels = {_org_key(label): label for label, _ in org_options}
+    org = org_labels.get(_org_key(request.args.get("org")), "")
+    if org:
+        rows = [r for r in rows if _org_key(r.get("organization")) == _org_key(org)]
     matched = len(rows)
 
     sort = request.args.get("sort") or DEFAULT_TEAM_SORT
@@ -752,6 +791,7 @@ def page_teams():
                            region=region, region_counts=region_counts,
                            defaulted=defaulted, all_regions=ALL_REGIONS,
                            grade=grade, grade_counts=grade_counts,
+                           org=org, org_options=org_options,
                            event_count=len(catalog.list_events()),
                            match_count=len(catalog.list_matches()))
 
@@ -845,6 +885,17 @@ def page_event(key):
     )
 
 
+def _webcast(event):
+    """The event's stream link as {"url": ...}, or None.
+
+    No link source is connected yet, so every event reads as "No stream". The
+    Stream column, filter and sort are built against this one function: once a
+    source is settled (see the feature/webcast_scraping branch), returning a
+    link here is all they need.
+    """
+    return None
+
+
 @app.route("/help")
 def page_help():
     """Explains every derived number in the UI, with live figures.
@@ -905,6 +956,19 @@ def page_matches():
         matches = [m for m in matches if str(m.get("event") or "").upper() == folded]
     if request.args.get("footage"):
         matches = [m for m in matches if catalog.segment_of(m)]
+    query = (request.args.get("q") or "").strip()
+    if query:
+        # Team numbers are matched whole ("929U" finds 929U, not 1929U's
+        # matches); anything else matches as text in the event or match name.
+        needle = query.lower()
+
+        def hit(match):
+            if any(team.lower() == needle for team in catalog.teams_in(match)):
+                return True
+            event = events.get(str(match.get("event") or "").upper()) or {}
+            return needle in " ".join(str(v or "") for v in (
+                match.get("name"), match.get("event"), event.get("name"))).lower()
+        matches = [m for m in matches if hit(m)]
 
     total = len(matches)
     try:
@@ -926,7 +990,7 @@ def page_matches():
                                  for m in window],
                            rounds=catalog.ROUNDS, videos=_list_videos(),
                            total=total, page=page, pages=pages,
-                           footage_only=bool(request.args.get("footage")))
+                           footage_only=bool(request.args.get("footage")), query=query)
 
 
 def _days_from_today(value, today=None):
@@ -944,6 +1008,78 @@ def _days_from_today(value, today=None):
         return (1, 0)
 
 
+# (key, header, numeric). Numeric columns start highest-first on their first
+# click; text columns start A-Z.
+EVENT_COLUMNS = (
+    ("name", "Event", False),
+    ("sku", "SKU", False),
+    ("importance", "Importance", True),
+    ("status", "Status", False),
+    ("grade", "Grade", False),
+    ("start", "Dates", False),
+    ("where", "Where", False),
+    ("matches", "Matches", True),
+    ("stream", "Stream", False),
+)
+EVENT_COLUMN_KEYS = {key for key, _, _ in EVENT_COLUMNS}
+EVENT_COLUMN_NUMERIC = {key: numeric for key, _, numeric in EVENT_COLUMNS}
+DEFAULT_EVENT_SORT = "importance"
+STATUS_ORDER = {"past": 0, "ongoing": 1, "upcoming": 2}
+
+# What the Stream column's button says, in the order the column sorts. An
+# upcoming event with no link is "none": the state describes the link, and
+# whether an event has happened is the Status filter's job.
+STREAM_STATES = {"stream": "Stream", "upcoming": "Upcoming", "none": "No stream"}
+
+
+def _stream_state(row):
+    if not row.get("webcast"):
+        return "none"
+    return "upcoming" if row["status"] == "upcoming" else "stream"
+
+
+def _event_sort_value(row, sort):
+    """The value a column sorts on, or None when the event has none."""
+    if sort == "importance":
+        return row["importance"]["score"]
+    if sort == "status":
+        return STATUS_ORDER.get(row["status"])
+    if sort == "where":
+        label = row.get("location_label")
+        return (regions.sort_key(row["region_group"]), label.lower()) if label else None
+    if sort == "stream":
+        return list(STREAM_STATES).index(_stream_state(row))
+    if sort == "near":
+        rank, days = _days_from_today(row.get("start"))
+        return None if rank else days
+    if sort == "matches":
+        return row.get("matches") or 0
+    value = row.get(sort)
+    if value in (None, ""):
+        return None
+    return value.lower() if isinstance(value, str) else value
+
+
+def _sorted_events(rows, sort, descending):
+    """Sort by one column, keeping unknown values last in both directions.
+
+    Ties break on start date then name - except importance, which breaks on
+    closeness to today, so of two equally important events the sooner one leads.
+    Successive stable sorts, least significant first; Python keeps equal items in
+    order even with reverse=True, so the tie-breakers are not flipped.
+    """
+    known = [r for r in rows if _event_sort_value(r, sort) is not None]
+    unknown = [r for r in rows if _event_sort_value(r, sort) is None]
+    for group in (known, unknown):
+        group.sort(key=lambda r: (r.get("name") or "").lower())
+        if sort == "importance":
+            group.sort(key=lambda r: _days_from_today(r.get("start")))
+        else:
+            group.sort(key=lambda r: str(r.get("start") or "9999"))
+    known.sort(key=lambda r: _event_sort_value(r, sort), reverse=descending)
+    return known + unknown
+
+
 @app.route("/events")
 def page_events():
     events = catalog.list_events()
@@ -955,11 +1091,19 @@ def page_events():
     rows = []
     for event in events.values():
         rows.append({**event, "status": catalog.event_status(event),
+                     "webcast": _webcast(event),
                      "matches": counts.get(event["key"], 0),
                      "region_group": regions.group_of(event.get("location")),
                      "grade": catalog.event_grade(event),
                      "importance": importance_module.score_event(event, elo),
                      "location_label": _location_label(event.get("location"))})
+
+    query = (request.args.get("q") or "").strip()
+    if query:
+        needle = query.lower()
+        rows = [r for r in rows
+                if needle in " ".join(str(r.get(f) or "")
+                                      for f in ("name", "sku", "key", "location_label")).lower()]
 
     region_counts = {}
     for row in rows:
@@ -976,8 +1120,9 @@ def page_events():
         rows = [r for r in rows if r.get("grade") == grade]
 
     requested = request.args.get("region")
-    defaulted = requested is None
-    region = DEFAULT_REGION if defaulted else requested
+    # As on the Teams page, the region default narrows browsing, never a search.
+    defaulted = requested is None and not query
+    region = DEFAULT_REGION if defaulted else (requested or "")
     if region == ALL_REGIONS:
         region = ""
     if defaulted and region and not region_counts.get(region):
@@ -986,21 +1131,26 @@ def page_events():
     if region:
         rows = [r for r in rows if r["region_group"] == region]
 
-    # Importance first by default. Ties and near-ties break on proximity to
-    # today, so two equally important events are ordered by which is sooner.
-    order = request.args.get("order")
-    if order == "date":
-        rows.sort(key=lambda e: (str(e.get("start") or ""), e.get("name") or ""))
-    elif order == "near":
-        rows.sort(key=lambda e: (_days_from_today(e.get("start")), e.get("name") or ""))
-    else:
-        order = "importance"
-        rows.sort(key=lambda e: (-e["importance"]["score"],
-                                 _days_from_today(e.get("start")), e.get("name") or ""))
+    # Old links used ?order=; keep them working.
+    legacy = request.args.get("order")
+    near = request.args.get("near") == "1" or legacy == "near"
+    sort = request.args.get("sort") or ("start" if legacy == "date" else DEFAULT_EVENT_SORT)
+    if sort not in EVENT_COLUMN_KEYS:
+        sort = DEFAULT_EVENT_SORT
+    default_dir = "desc" if EVENT_COLUMN_NUMERIC[sort] else "asc"
+    dir_ = request.args.get("dir") if request.args.get("dir") in ("asc", "desc") else default_dir
+    # Closest to today has one sensible direction: nearest first.
+    rows = _sorted_events(rows, "near" if near else sort, dir_ == "desc" and not near)
 
     chosen = request.args.get("status")
     if chosen:
         rows = [r for r in rows if r["status"] == chosen]
+    stream_counts = {state: 0 for state in STREAM_STATES}
+    for row in rows:
+        stream_counts[_stream_state(row)] += 1
+    stream = request.args.get("stream") if request.args.get("stream") in STREAM_STATES else ""
+    if stream:
+        rows = [r for r in rows if _stream_state(r) == stream]
     tally = {}
     for event in events.values():
         state = catalog.event_status(event)
@@ -1020,7 +1170,9 @@ def page_events():
                            shown=shown, page=page, pages=pages,
                            region=region, region_counts=region_counts,
                            defaulted=defaulted, all_regions=ALL_REGIONS,
-                           grade=grade, grade_counts=grade_counts, order=order,
+                           grade=grade, grade_counts=grade_counts,
+                           columns=EVENT_COLUMNS, sort=sort, dir=dir_, near=near, query=query,
+                           stream=stream, stream_counts=stream_counts, stream_states=STREAM_STATES,
                            today=_dt.date.today().isoformat())
 
 

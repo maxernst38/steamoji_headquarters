@@ -17,4 +17,29 @@
 <main>
   {% block content %}{% endblock %}
 </main>
+<script>
+// Filters apply as soon as they change. `fo` reopens the menu after the reload,
+// so several filters can be set in a row; it is only sent on a filter change,
+// not when the search button is pressed.
+document.addEventListener('change', (event) => {
+  const menu = event.target.closest('details.filters');
+  if (!menu || !event.target.form) return;
+  const flag = menu.querySelector('input[name="fo"]');
+  if (flag) flag.disabled = false;
+  event.target.form.submit();
+});
+
+// A button with data-toggle="<id>" shows and hides that panel. Used for the
+// Add forms, which are POST forms and so cannot sit inside the filter form the
+// way the Filters <details> does.
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-toggle]');
+  if (!button) return;
+  const panel = document.getElementById(button.dataset.toggle);
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  button.setAttribute('aria-expanded', String(!panel.hidden));
+  if (!panel.hidden) panel.querySelector('input, select')?.focus();
+});
+</script>
 {% block scripts %}{% endblock %}
