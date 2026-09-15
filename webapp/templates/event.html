@@ -37,6 +37,41 @@
 {% endif %}
 
 <div class="panel">
+  <h2>Webcast</h2>
+  {% if webcast %}
+  <div class="row" style="margin-top:0">
+    <a href="{{ webcast.url }}" target="_blank" rel="noopener noreferrer"><button type="button">Watch ↗</button></a>
+    <span class="tag">{{ webcast.kind_label }}</span>
+    <span class="mono muted">{{ webcast.url }}</span>
+  </div>
+  <p class="note">
+    {% if webcast.kind == 'video' and webcast.shared_with %}
+    <strong>This link is also listed for {{ webcast.shared_with }} other event{{ '' if webcast.shared_with == 1 else 's' }}.</strong>
+    It is a reused stream address rather than this event's own video, so once a later event streams
+    on it, it may no longer show this one.
+    {% elif webcast.kind == 'video' %}
+    Links to a specific stream.
+    {% elif webcast.kind == 'channel' %}
+    Links to the host's channel, not a specific video. Look for a stream dated
+    {{ event.start or 'around the event' }}{% if event.end and event.end != event.start %} – {{ event.end }}{% endif %}.
+    {% elif webcast.kind == 'playlist' %}
+    Links to a playlist; this event's stream should be one of the entries.
+    {% else %}
+    Links to a stream page outside YouTube.
+    {% endif %}
+    Posted by the Event Partner on events.vex.com/webcasts{% if webcast.previous %}; the link has changed
+    {{ webcast.previous|length }} time{{ '' if webcast.previous|length == 1 else 's' }} since first seen{% endif %}.
+  </p>
+  {% else %}
+  <p class="note">
+    No webcast is listed for this event on events.vex.com/webcasts. Partners add links themselves,
+    often only days before the event, so run <span class="mono">python -m integrations.webcasts</span>
+    again closer to the date.
+  </p>
+  {% endif %}
+</div>
+
+<div class="panel">
   <h2>Elimination bracket</h2>
   {% if bracket.has_eliminations %}
   <div class="bracket">

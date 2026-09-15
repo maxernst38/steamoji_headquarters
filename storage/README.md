@@ -19,6 +19,7 @@ Files land under `data/` — `data/calibrations/`, `data/seeds/`, `data/results/
 | `migrate_catalog.py` | one-shot: register segments already on disk as match records |
 | `regions.py` | groups a team's location into something worth filtering by |
 | `event_details.py` | awards, qualification rankings and skills, one file per event |
+| `webcasts.py` | one webcast link per event SKU, merged across refreshes (`data/webcasts.json`) |
 
 ## Why the catalog is separate
 

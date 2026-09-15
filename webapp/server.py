@@ -24,6 +24,7 @@ from storage import calibration_store
 from storage import catalog
 from storage import event_details
 from storage import regions
+from storage import webcasts
 from analysis import bracket as bracket_module
 from analysis import importance as importance_module
 from analysis import ratings as ratings_module
@@ -842,7 +843,13 @@ def page_event(key):
                    if (m["alliances"]["red"]["score"] is not None
                        and m["alliances"]["blue"]["score"] is not None)),
         with_footage=sum(1 for m in matches if catalog.segment_of(m)),
+        webcast=_webcast(event),
     )
+
+
+def _webcast(event, table=None):
+    table = webcasts.load_all() if table is None else table
+    return webcasts.describe(webcasts.get(event.get("sku") or event.get("key"), table=table), table)
 
 
 @app.route("/help")
@@ -952,9 +959,11 @@ def page_events():
         counts[match.get("event")] = counts.get(match.get("event"), 0) + 1
 
     _, elo = _ratings()
+    webcast_table = webcasts.load_all()
     rows = []
     for event in events.values():
         rows.append({**event, "status": catalog.event_status(event),
+                     "webcast": _webcast(event, webcast_table),
                      "matches": counts.get(event["key"], 0),
                      "region_group": regions.group_of(event.get("location")),
                      "grade": catalog.event_grade(event),
@@ -1001,6 +1010,10 @@ def page_events():
     chosen = request.args.get("status")
     if chosen:
         rows = [r for r in rows if r["status"] == chosen]
+    with_webcast = sum(1 for r in rows if r["webcast"])
+    webcast_only = request.args.get("webcast") == "1"
+    if webcast_only:
+        rows = [r for r in rows if r["webcast"]]
     tally = {}
     for event in events.values():
         state = catalog.event_status(event)
@@ -1021,6 +1034,7 @@ def page_events():
                            region=region, region_counts=region_counts,
                            defaulted=defaulted, all_regions=ALL_REGIONS,
                            grade=grade, grade_counts=grade_counts, order=order,
+                           webcast_only=webcast_only, with_webcast=with_webcast,
                            today=_dt.date.today().isoformat())
 
 

@@ -9,6 +9,7 @@ match was typed in or imported.
 | file | holds |
 |---|---|
 | `vex_events.py` | the Public VEX Events API: events, teams, matches |
+| `webcasts.py` | webcast links scraped from `events.vex.com/webcasts` — links only, nothing downloaded |
 
 ## The API moved
 
@@ -117,3 +118,24 @@ hand keeps the footage and refreshes only the alliances and scores.
 `source` on each record says where its data came from — `vex-api`, `manual`,
 `imported` (registered from files on disk), or `implied` (a team that exists only
 because an alliance named it).
+
+## Webcasts
+
+```
+python -m integrations.webcasts
+```
+
+The API has no webcast field, so links come from the public webcasts page, where
+each event name ends in its SKU. Run it again whenever you like; it merges, so a
+second run reports everything unchanged.
+
+- **It is behind Cloudflare.** A bare user agent gets a 403 challenge page, which
+  is raised as an error rather than read as "no webcasts".
+- **Most links are not a video.** Of 126 rows, 31 pointed at a specific video,
+  89 at a channel, 5 at a stream page elsewhere and 1 at a playlist. The event
+  page says which, because a channel link still means finding the right stream.
+- **Some "videos" are shared.** One YouTube `/live/` address is listed for eleven
+  events: a partner's permanent stream link, not any one event's footage.
+- **Links are never deleted by a refresh.** A changed link keeps the old one in
+  `previous`. Partners often post only days before an event, so coverage of
+  upcoming events grows as the season goes on.

@@ -55,6 +55,10 @@
       <option value="near" {{ 'selected' if order == 'near' }}>Closest to today</option>
       <option value="date" {{ 'selected' if order == 'date' }}>Chronological</option>
     </select>
+    <label class="note" style="margin:0">
+      <input type="checkbox" name="webcast" value="1" {{ 'checked' if webcast_only }} onchange="this.form.submit()">
+      Webcast listed ({{ with_webcast }})
+    </label>
   </form>
   {% if order == 'importance' %}
   <p class="note">
@@ -78,7 +82,9 @@
     <tbody>
       {% for event in rows %}
       <tr>
-        <td><a href="/event/{{ event.key }}"><strong>{{ event.name }}</strong></a></td>
+        <td><a href="/event/{{ event.key }}"><strong>{{ event.name }}</strong></a>
+          {%- if event.webcast %} <a href="{{ event.webcast.url }}" target="_blank" rel="noopener noreferrer"
+            class="tag" title="Webcast: {{ event.webcast.kind_label }}">▶ {{ event.webcast.kind_label }}</a>{% endif %}</td>
         <td class="num muted">{{ event.sku or '—' }}</td>
         {% set imp = event.importance %}
         <td class="num right">
@@ -102,7 +108,7 @@
     </tbody>
   </table>
   {% if pages > 1 %}
-  {% set base = '/events?' ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('order=' ~ order ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') %}
+  {% set base = '/events?' ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('order=' ~ order ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') ~ ('webcast=1&' if webcast_only else '') %}
   <div class="row">
     {% if page > 1 %}<a href="{{ base }}page={{ page - 1 }}"><button type="button" class="secondary">← Previous</button></a>{% endif %}
     <span class="note">showing {{ rows|length }} of {{ shown }} · page {{ page }} of {{ pages }}</span>
