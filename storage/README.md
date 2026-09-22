@@ -15,11 +15,12 @@ Files land under `data/` — `data/calibrations/`, `data/seeds/`, `data/results/
 | `calibration_store.py` | the field quad and homography for one match |
 | `seed_store.py` | hand-drawn robot boxes for one match |
 | `results_store.py` | a manifest per finished run, so a match is never processed twice |
-| `catalog.py` | teams, events and matches — who was playing, and where the footage is |
+| `catalog.py` | teams, events and matches — who was playing, and where the footage is. One directory per program (`data/catalog`, `data/catalog_viqrc`), and a `scoring` argument for cooperative play |
 | `migrate_catalog.py` | one-shot: register segments already on disk as match records |
 | `regions.py` | groups a team's location into something worth filtering by |
 | `event_details.py` | awards, qualification rankings and skills, one file per event |
 | `webcasts.py` | one webcast link per event SKU, merged across refreshes (`data/webcasts.json`) |
+| `team_media.py` | each team's YouTube channel and robot videos, with confidence and removals (`data/team_media.json`) |
 
 ## Why the catalog is separate
 

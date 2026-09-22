@@ -51,8 +51,10 @@ calibration/          field geometry: homography, the drag tool, validation view
 detection/            finding and following robots, and drawing the output
 storage/              what persists between runs (see storage/README.md)
 integrations/         outside data sources (see integrations/README.md)
+  refresh.py            one command to update every source, re-fetching only what moved
 analysis/             ratings derived from match results (see analysis/README.md)
 webapp/               Flask server, team-centric pages, and the setup workspace
+  programs.py           V5RC or VIQRC: which catalog a page reads, how a match scores, and the palette
 training/             detector training (currently not working — see below)
 archive/              approaches that failed, kept for their findings
 
@@ -60,7 +62,8 @@ videos/               input footage (not versioned)
 data/                 everything persisted, per match (see data/README.md)
   calibrations/         the field you drew
   seeds/                the robot boxes you drew
-  catalog/              teams, events and matches
+  catalog/              teams, events and matches (V5RC)
+  catalog_viqrc/        the same tables for VEX IQ — separate because team numbers are reused
   cache/                cached API responses
   vex_token             your VEX Events API token (never committed)
   results/              finished runs

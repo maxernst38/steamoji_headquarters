@@ -1,20 +1,53 @@
 <!doctype html>
+<html lang="en" data-program="{{ program.code }}">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}VEX Tracker{% endblock %}</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+</head>
+<body>
 <header>
-  <nav class="nav">
+  {# Top row: the three tabs and the program the whole site is showing. #}
+  <nav class="nav nav-top">
     <a class="brand" href="/">VEX Tracker</a>
+    <a href="/" class="{{ 'on' if tab == 'scout' }}">Scout</a>
+    <a href="/learn" class="{{ 'on' if tab == 'learn' }}">Learn</a>
+    <a href="/practice" class="{{ 'on' if tab == 'practice' }}">Practice</a>
+    <span class="program-switch" role="group" aria-label="Program">
+      <span class="program-knob" aria-hidden="true"></span>
+      {% for option in programs %}
+      <a href="/program/{{ option.code }}?next={{ here|urlencode }}"
+         data-program-code="{{ option.code }}"
+         title="Show {{ option.name }}"
+         {% if option.code == program.code %}aria-current="true"{% endif %}>{{ option.label }}</a>
+      {% endfor %}
+    </span>
+  </nav>
+  {# Second row: the sections of whichever tab is open. Only Scout has any yet. #}
+  {% if tab == 'scout' %}
+  <nav class="nav nav-sections">
     <a href="/" class="{{ 'on' if section == 'teams' }}">Teams</a>
     <a href="/matches" class="{{ 'on' if section == 'matches' }}">Matches</a>
     <a href="/events" class="{{ 'on' if section == 'events' }}">Events</a>
     <a href="/help" class="{{ 'on' if section == 'help' }}">How it's calculated</a>
   </nav>
+  {% endif %}
   <h1>{% block heading %}{% endblock %}</h1>
   <p class="sub">{% block subheading %}{% endblock %}</p>
 </header>
 <main>
+  {# A program with nothing imported would otherwise look like a broken page. #}
+  {% if program_empty %}
+  <div class="panel notice">
+    <strong>No {{ program.label }} data has been imported yet.</strong>
+    These pages are empty rather than broken: the site is showing {{ program.name }}, and nothing
+    has been imported for it. The other program's data is still there &mdash;
+    {% for option in programs if option.code != program.code %}
+    <a href="/program/{{ option.code }}?next={{ here|urlencode }}">switch back to {{ option.label }}</a>.
+    {% endfor %}
+  </div>
+  {% endif %}
   {% block content %}{% endblock %}
 </main>
 <script>
@@ -27,6 +60,41 @@ document.addEventListener('change', (event) => {
   const flag = menu.querySelector('input[name="fo"]');
   if (flag) flag.disabled = false;
   event.target.form.submit();
+});
+
+// Switching program is a page load, so the colour change cannot be animated
+// across it. The click paints the new theme first - data-program is what every
+// palette rule keys off - and the navigation follows once the colours and the
+// knob have finished moving. The page that arrives is already in that theme,
+// so nothing flashes back.
+const THEME_MS = 340;
+
+document.addEventListener('click', (event) => {
+  const link = event.target.closest('.program-switch a');
+  if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+  const root = document.documentElement;
+  const chosen = link.dataset.programCode;
+  if (!chosen || chosen === root.dataset.program) return;
+  event.preventDefault();
+
+  for (const option of link.parentElement.querySelectorAll('a')) {
+    // aria-current="" reads as "false", so the attribute is removed rather
+    // than emptied on the option being switched away from.
+    if (option === link) option.setAttribute('aria-current', 'true');
+    else option.removeAttribute('aria-current');
+  }
+
+  // Order matters: the transition rules have to be in effect before the
+  // colours change, or there is no earlier state to animate from. Adding the
+  // class, reading a style back to force the recalculation, then flipping the
+  // theme on the next frame makes that order explicit rather than relying on
+  // the browser resolving both in one pass.
+  root.classList.add('switching');
+  void getComputedStyle(root).transitionDuration;
+  requestAnimationFrame(() => {
+    root.dataset.program = chosen;
+    window.setTimeout(() => { window.location.href = link.href; }, THEME_MS);
+  });
 });
 
 // A button with data-toggle="<id>" shows and hides that panel. Used for the
@@ -43,3 +111,5 @@ document.addEventListener('click', (event) => {
 });
 </script>
 {% block scripts %}{% endblock %}
+</body>
+</html>

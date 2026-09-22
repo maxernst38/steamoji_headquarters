@@ -7,6 +7,7 @@
 {% endblock %}
 
 {% block content %}
+{% set coop = program.scoring == 'cooperative' %}
 <div class="panel">
   <h2>All matches</h2>
   {% from "_filters.html" import filter_menu %}
@@ -58,10 +59,16 @@
     </label>
     <label>Instance<input name="instance" type="number" value="1" min="1"></label>
     <label>Number<input name="number" type="number" value="1" min="1"></label>
+    {% if coop %}
+    <label>Team<input name="red" class="mono" placeholder="838J"></label>
+    <label>Partner<input name="blue" class="mono" placeholder="478X"></label>
+    <label>Score<input name="red_score" type="number" placeholder="optional"></label>
+    {% else %}
     <label>Red teams<input name="red" class="mono" placeholder="929U, 1234A"></label>
     <label>Blue teams<input name="blue" class="mono" placeholder="55B, 7C"></label>
     <label>Red score<input name="red_score" type="number" placeholder="optional"></label>
     <label>Blue score<input name="blue_score" type="number" placeholder="optional"></label>
+    {% endif %}
     <label>Video
       <select name="video_file">
         <option value="">— none —</option>
@@ -83,7 +90,8 @@
   </div>
   {% if rows %}
   <table>
-    <thead><tr><th>Date</th><th>Event</th><th>Match</th><th>Red</th><th>Blue</th>
+    <thead><tr><th>Date</th><th>Event</th><th>Match</th>
+      {%- if coop %}<th>Teams</th>{% else %}<th>Red</th><th>Blue</th>{% endif %}
       <th class="right">Score</th><th>Footage</th><th>Analysis</th></tr></thead>
     <tbody>
       {% for row in rows %}
@@ -97,9 +105,15 @@
             title="{{ events.get(row.match.event, {}).get('name', row.match.event) }}">
             {{ events.get(row.match.event, {}).get('name', row.match.event)[:34] }}</a></td>
         <td><a href="/match/{{ row.match.key }}"><strong>{{ row.match.name }}</strong></a></td>
+        {%- if coop %}
+        {% set pair = red.teams + blue.teams %}
+        <td class="num">{% for t in pair %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' + ' if not loop.last }}{% endfor %}{{ '—' if not pair }}</td>
+        <td class="num right">{% if red.score is not none %}{{ red.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        {%- else %}
         <td class="num">{% for t in red.teams %}<a href="/team/{{ t }}" class="side red">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not red.teams }}</td>
         <td class="num">{% for t in blue.teams %}<a href="/team/{{ t }}" class="side blue">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not blue.teams }}</td>
         <td class="num right">{% if red.score is not none and blue.score is not none %}{{ red.score }}–{{ blue.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        {%- endif %}
         <td class="muted mono">{% if row.match.video and row.match.video.file %}{{ row.match.video.start_frame }}–{{ row.match.video.end_frame }}{% else %}—{% endif %}</td>
         <td>
           {% if row.status.analysed %}<span class="tag ok">analysed</span>

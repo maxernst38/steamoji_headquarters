@@ -1,13 +1,89 @@
-:root {
-  --bg: #14161a;
-  --panel: #1c1f26;
-  --line: #2c313b;
-  --text: #e6e8ec;
-  --muted: #9aa3b2;
-  --accent: #4da3ff;
-  --accent-dim: #2b6fb5;
-  --good: #5ac878;
-  --bad: #ff6b6b;
+/* Every colour in the site is a token, and the tokens are the only thing that
+   changes between programs: V5RC is black and red, VIQRC white and blue. The
+   theme is chosen by the data-program attribute the server puts on <html>, so
+   adding a program means adding one block here, not a second stylesheet. */
+:root, [data-program="v5rc"] {
+  --bg: #0c0c0e;
+  --panel: #161619;
+  --panel-alt: #1b1b1f;
+  --surface: #1a1a1e;
+  --inset: #101012;
+  --sunken: #08080a;
+  --line: #2b2b31;
+  --text: #ededf0;
+  --muted: #a0a0aa;
+  --accent: #d0211f;
+  --accent-dim: #8f1d1d;
+  --on-accent: #ffffff;
+  /* Red at full strength is too dark to read as body text on near-black, so
+     links and highlights use a lighter red than surfaces do. */
+  --link: #ff5a52;
+  --selected-bg: #2a1416;
+  --control: #2a2a30;
+  --control-hover: #35353d;
+  --disabled-bg: #212127;
+  --disabled-text: #6e6e78;
+  --good: #4ecb71;
+  --good-line: #2b5c3a;
+  --bad: #ff8a80;
+  --bad-line: #6b3a34;
+  --warn: #d9a441;
+  --warn-line: #6b5524;
+  --won-bg: #17261b;
+  /* Alliance colours are the game's, not the theme's: red and blue have to
+     stay red and blue on a page about red and blue alliances. */
+  --alliance-red: #c0392b;
+  --alliance-red-text: #ff8a86;
+  --alliance-blue: #2b6fb5;
+  --alliance-blue-text: #6fb4ff;
+  --pending-bg: #3a1a1f;
+  --pending-hover: #462026;
+  --pending-text: #ffc2c2;
+  --pending-edge: #e5484d;
+  --done-bg: #16301f;
+  --done-hover: #1d3d29;
+  --done-text: #9ff0c0;
+  --done-edge: #30c07a;
+}
+
+[data-program="viqrc"] {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-alt: #eef2f8;
+  --surface: #f7f9fc;
+  --inset: #ffffff;
+  --sunken: #e7edf5;
+  --line: #d5dbe6;
+  --text: #14181f;
+  --muted: #5c6473;
+  --accent: #0b63ce;
+  --accent-dim: #9cc4ee;
+  --on-accent: #ffffff;
+  --link: #0b63ce;
+  --selected-bg: #e8f1fc;
+  --control: #e4e9f1;
+  --control-hover: #d4dbe7;
+  --disabled-bg: #eceff4;
+  --disabled-text: #6e7684;
+  --good: #157f46;
+  --good-line: #a9d9bd;
+  --bad: #c0392b;
+  --bad-line: #eab5ad;
+  --warn: #8a6100;
+  --warn-line: #e3cf9a;
+  --won-bg: #e7f5ec;
+  --alliance-red: #c0392b;
+  --alliance-red-text: #b52d20;
+  --alliance-blue: #1565c0;
+  --alliance-blue-text: #1565c0;
+  --pending-bg: #fdecea;
+  --pending-hover: #fadbd7;
+  --pending-text: #8c2318;
+  --pending-edge: #d9422f;
+  --done-bg: #e8f6ee;
+  --done-hover: #d8efe2;
+  --done-text: #17603a;
+  --done-edge: #2f9e63;
 }
 
 * { box-sizing: border-box; }
@@ -60,10 +136,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 28px 60px; }
   border: 1px solid var(--line);
   border-radius: 7px;
   cursor: pointer;
-  background: #191c22;
+  background: var(--surface);
 }
 .item:hover { border-color: var(--accent-dim); }
-.item.selected { border-color: var(--accent); background: #1b2530; }
+.item.selected { border-color: var(--accent); background: var(--selected-bg); }
 .item.disabled { opacity: .5; cursor: not-allowed; }
 .item .name { flex: 1; }
 .item .meta { color: var(--muted); font-size: 12px; }
@@ -75,14 +151,14 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 28px 60px; }
   border: 1px solid var(--line);
   color: var(--muted);
 }
-.tag.ok { color: var(--good); border-color: #2f5c3c; }
-.tag.missing { color: var(--bad); border-color: #6b3030; }
+.tag.ok { color: var(--good); border-color: var(--good-line); }
+.tag.missing { color: var(--bad); border-color: var(--bad-line); }
 
 .row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 
 button {
   background: var(--accent);
-  color: #08121c;
+  color: var(--on-accent);
   border: 0;
   border-radius: 7px;
   padding: 9px 16px;
@@ -90,21 +166,21 @@ button {
   font-weight: 600;
   cursor: pointer;
 }
-button:disabled { background: #333a45; color: #7c8594; cursor: not-allowed; }
+button:disabled { background: var(--disabled-bg); color: var(--disabled-text); cursor: not-allowed; }
 
-button.secondary { background: #333a45; color: var(--text); }
-button.secondary:hover { background: #3d4552; }
+button.secondary { background: var(--control); color: var(--text); }
+button.secondary:hover { background: var(--control-hover); }
 
 /* Compact enough to sit in a table row; one width so the column lines up. */
 button.stream-button { padding: 4px 10px; font-size: 12px; min-width: 88px; white-space: nowrap; }
 
-.tag.saved { color: var(--accent); border-color: var(--accent-dim); }
+.tag.saved { color: var(--link); border-color: var(--accent-dim); }
 
-a { color: var(--accent); }
+a { color: var(--link); }
 
 .bar {
   height: 9px;
-  background: #11131a;
+  background: var(--sunken);
   border-radius: 20px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -119,7 +195,7 @@ a { color: var(--accent); }
 .log {
   margin: 12px 0 0;
   padding: 10px 12px;
-  background: #11131a;
+  background: var(--inset);
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--muted);
@@ -150,16 +226,16 @@ td.num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   max-height: 62vh;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #0b0d12;
+  background: var(--sunken);
   margin-bottom: 14px;
 }
 #seed-canvas { display: block; cursor: crosshair; max-width: 100%; }
 
 button.status { border-left: 5px solid transparent; }
-button.status.pending { background: #4a2230; color: #ffb4b4; border-left-color: #e5484d; }
-button.status.pending:hover { background: #5a2a3a; }
-button.status.done { background: #1d3a2a; color: #9ff0c0; border-left-color: #30c07a; }
-button.status.done:hover { background: #244a35; }
+button.status.pending { background: var(--pending-bg); color: var(--pending-text); border-left-color: var(--pending-edge); }
+button.status.pending:hover { background: var(--pending-hover); }
+button.status.done { background: var(--done-bg); color: var(--done-text); border-left-color: var(--done-edge); }
+button.status.done:hover { background: var(--done-hover); }
 #field-canvas { display: block; cursor: grab; max-width: 100%; }
 #field-canvas:active { cursor: grabbing; }
 
@@ -169,14 +245,97 @@ button.status.done:hover { background: #244a35; }
 .nav a { color: var(--muted); text-decoration: none; }
 .nav a:hover { color: var(--text); }
 .nav a.on { color: var(--text); font-weight: 600; }
-.nav .brand { color: var(--accent); font-weight: 600; margin-right: 6px; letter-spacing: .02em; }
+.nav .brand { color: var(--link); font-weight: 600; margin-right: 6px; letter-spacing: .02em; }
+
+/* Two rows: the three tabs, then the sections of whichever tab is open. The
+   program switch sits at the far right of the top row, where it reads as a
+   property of the whole site rather than of the page under it. */
+.nav-top { margin-bottom: 6px; font-size: 14px; }
+.nav-top a:not(.brand) { padding-bottom: 5px; border-bottom: 2px solid transparent; }
+.nav-top a.on { border-bottom-color: var(--accent); }
+.nav-sections { margin-bottom: 14px; }
+.nav-sections a.on { color: var(--link); }
+
+/* A sliding switch rather than two buttons: equal columns, so the knob can be
+   half the track wide and land exactly on the other option. Which side it sits
+   on follows the data-program attribute, not the server-rendered .on class, so
+   a click can move it before the new page has loaded. */
+.program-switch {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-self: center;
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.program-knob {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  /* Both sides are written as calc() so the browser interpolates between a
+     pixel offset and a percentage; the travel is `left` rather than a
+     transform because a transform runs on the compositor, where it is the one
+     animation on the page that does not reliably play. */
+  left: calc(0% + 2px);
+  width: calc(50% - 2px);
+  border-radius: 999px;
+  background: var(--accent);
+}
+[data-program="viqrc"] .program-knob { left: calc(50% + 0px); }
+.nav .program-switch a {
+  position: relative;           /* above the knob */
+  padding: 3px 14px;
+  text-align: center;
+  white-space: nowrap;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: var(--muted);
+  border-bottom: 0;
+}
+[data-program="v5rc"] .program-switch a[data-program-code="v5rc"],
+[data-program="viqrc"] .program-switch a[data-program-code="viqrc"] { color: var(--on-accent); }
+.nav .program-switch a:hover { color: var(--text); }
+[data-program="v5rc"] .program-switch a[data-program-code="v5rc"]:hover,
+[data-program="viqrc"] .program-switch a[data-program-code="viqrc"]:hover { color: var(--on-accent); }
+
+/* Transitions are switched on only while a program change is in flight, so
+   they cost nothing on every other hover and click. The class is dropped by
+   the navigation that follows. */
+html.switching, html.switching *, html.switching *::before, html.switching *::after {
+  transition: background-color .32s ease, border-color .32s ease, color .32s ease,
+              fill .32s ease, outline-color .32s ease;
+}
+html.switching .program-knob {
+  transition: background-color .32s ease, left .32s cubic-bezier(.4, 0, .2, 1);
+}
+/* No prefers-reduced-motion guard here on purpose. This animation was asked
+   for explicitly, it is one small control moving 60px once per switch, and
+   guarding it is what made both animations look broken: browsers report
+   `reduce` whenever Windows has animation effects turned off, which is a
+   common default. To honour the setting again, wrap the two rules above in
+   `@media (prefers-reduced-motion: no-preference)`. */
+
+/* A tab with nothing in it yet says so, rather than showing an empty page. */
+.stub { padding: 34px 20px; text-align: center; color: var(--muted); }
+.stub h3 { margin: 0 0 8px; color: var(--text); font-size: 16px; }
+.stub p { margin: 0 auto; max-width: 62ch; font-size: 14px; }
+.stub ul { margin: 14px auto 0; max-width: 62ch; text-align: left; font-size: 14px; line-height: 1.8; }
+
+.panel.notice { border-left: 3px solid var(--accent); color: var(--muted); font-size: 14px; }
+.panel.notice strong { color: var(--text); }
 
 h1 .light { color: var(--muted); font-weight: 400; margin-left: 8px; }
 
 .search {
   flex: 1;
   min-width: 240px;
-  background: #11131a;
+  background: var(--inset);
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--text);
@@ -201,19 +360,19 @@ details.filters > summary::-webkit-details-marker { display: none; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #333a45;
+  background: var(--control);
   color: var(--text);
   border-radius: 7px;
   padding: 7px 14px;
   font-size: 14px;
   font-weight: 600;
 }
-details.filters > summary:hover .filters-toggle { background: #3d4552; }
+details.filters > summary:hover .filters-toggle { background: var(--control-hover); }
 details.filters[open] .filters-toggle { background: var(--accent-dim); }
 details.filters > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 7px; }
 .filters-count {
   background: var(--accent);
-  color: #08121c;
+  color: var(--on-accent);
   border-radius: 999px;
   min-width: 20px;
   padding: 0 6px;
@@ -229,7 +388,7 @@ details.filters > summary:focus-visible { outline: 2px solid var(--accent); outl
   gap: 12px 16px;
   margin-top: 10px;
   padding: 14px;
-  background: #171a20;
+  background: var(--panel-alt);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -244,13 +403,13 @@ details.filters > summary:focus-visible { outline: 2px solid var(--accent); outl
 .add-panel {
   margin-top: 10px;
   padding: 14px;
-  background: #171a20;
+  background: var(--panel-alt);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 
 th.right, td.right { text-align: right; }
-tbody tr:hover { background: #191c22; }
+tbody tr:hover { background: var(--surface); }
 td a { text-decoration: none; }
 td a:hover { text-decoration: underline; }
 
@@ -273,7 +432,7 @@ td a:hover { text-decoration: underline; }
   flex-direction: column;
   gap: 2px;
   padding: 12px 14px;
-  background: #191c22;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -282,8 +441,8 @@ td a:hover { text-decoration: underline; }
 .card .f { color: var(--muted); font-size: 11px; }
 
 .side { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
-.side.red { color: #ff7a7a; }
-.side.blue { color: #6fb4ff; }
+.side.red { color: var(--alliance-red-text); }
+.side.blue { color: var(--alliance-blue-text); }
 
 .res { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 .res.win { color: var(--good); }
@@ -295,7 +454,7 @@ a.item { text-decoration: none; color: inherit; }
 .form { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; align-items: end; }
 .form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
 .form input, .form select {
-  background: #11131a;
+  background: var(--inset);
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--text);
@@ -306,7 +465,7 @@ a.item { text-decoration: none; color: inherit; }
 .form input:focus, .form select:focus { outline: none; border-color: var(--accent-dim); }
 .form-actions { grid-column: 1 / -1; }
 select {
-  background: #11131a;
+  background: var(--inset);
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--text);
@@ -315,8 +474,8 @@ select {
 }
 
 .tag.state-past { color: var(--muted); }
-.tag.state-ongoing { color: var(--good); border-color: #2f5c3c; }
-.tag.state-upcoming { color: #d9a441; border-color: #6b5524; }
+.tag.state-ongoing { color: var(--good); border-color: var(--good-line); }
+.tag.state-upcoming { color: var(--warn); border-color: var(--warn-line); }
 .tag.state-unknown { color: var(--muted); }
 
 th.sortable { padding: 0; }
@@ -327,11 +486,16 @@ th.sortable a {
   text-decoration: none;
   white-space: nowrap;
 }
-th.sortable a:hover { color: var(--text); background: #191c22; }
-th.sortable.sorted a { color: var(--accent); }
+th.sortable a:hover { color: var(--text); background: var(--surface); }
+th.sortable.sorted a { color: var(--link); }
 th.sortable .arrow { margin-left: 5px; font-size: 10px; }
 
 td.approx { font-style: italic; opacity: .75; }
+
+/* Long channel names would otherwise widen the teams table past the screen. */
+.channel-cell { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channel-cell a { text-decoration: none; }
+.channel-cell a:hover { text-decoration: underline; }
 
 .item .name a { text-decoration: none; }
 .item .name a:hover { text-decoration: underline; }
@@ -359,7 +523,7 @@ td.approx { font-style: italic; opacity: .75; }
 .slot {
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #191c22;
+  background: var(--surface);
   overflow: hidden;
 }
 .slot.unplayed { opacity: .55; }
@@ -372,9 +536,9 @@ td.approx { font-style: italic; opacity: .75; }
   font-size: 12px;
   border-left: 3px solid transparent;
 }
-.slot-side.red { border-left-color: #a33; }
-.slot-side.blue { border-left-color: #2b6fb5; }
-.slot-side.won { background: #1d2a20; font-weight: 600; }
+.slot-side.red { border-left-color: var(--alliance-red); }
+.slot-side.blue { border-left-color: var(--alliance-blue); }
+.slot-side.won { background: var(--won-bg); font-weight: 600; }
 .slot-side.won .slot-score { color: var(--good); }
 .slot-teams { flex: 1; }
 .slot-teams a { text-decoration: none; }
@@ -385,23 +549,39 @@ td.approx { font-style: italic; opacity: .75; }
   gap: 8px;
   padding: 4px 9px;
   border-top: 1px solid var(--line);
-  background: #14161a;
+  background: var(--bg);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
 .slot-games a { color: var(--muted); text-decoration: none; }
-.slot-games a:hover { color: var(--accent); }
+.slot-games a:hover { color: var(--link); }
 
-td.highlight { color: var(--accent); font-weight: 600; }
+td.highlight { color: var(--link); font-weight: 600; }
 
 .bar-mini {
   display: block;
   height: 3px;
   width: 52px;
   margin: 3px 0 0 auto;
-  background: #11131a;
+  background: var(--sunken);
   border-radius: 2px;
   overflow: hidden;
 }
 .bar-mini span { display: block; height: 100%; background: var(--accent-dim); }
 .imp-parts { color: var(--muted); font-size: 10px; letter-spacing: .02em; cursor: help; }
+
+/* Robot videos on the team page. */
+.video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+.video-card { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.video-thumb { display: block; aspect-ratio: 16 / 9; background: var(--sunken); }
+.video-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.video-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 12px; }
+.video-title { color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; line-height: 1.35; }
+.video-title:hover { text-decoration: underline; }
+.video-meta { color: var(--muted); font-size: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.video-actions { display: flex; gap: 8px; margin-top: 2px; }
+.inline-form { display: inline; margin: 0; }
+button.small { padding: 4px 10px; font-size: 12px; }
+details.suggestions { margin-top: 16px; }
+details.suggestions > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+
