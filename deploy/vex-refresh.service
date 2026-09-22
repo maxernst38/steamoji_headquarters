@@ -1,0 +1,14 @@
+# The daily data refresh. Paired with vex-refresh.timer.
+[Unit]
+Description=Refresh VEX Tracker data from every source
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=vex
+WorkingDirectory=/srv/vex-tracker
+ExecStart=/srv/vex-tracker/.venv/bin/python -m integrations.refresh
+# A walk over two seasons plus the YouTube batch; it has never taken more than
+# about ten minutes, and a hung request should not keep the box busy all day.
+TimeoutStartSec=45min

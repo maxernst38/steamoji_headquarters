@@ -68,6 +68,7 @@ data/                 everything persisted, per match (see data/README.md)
   vex_token             your VEX Events API token (never committed)
   results/              finished runs
 docs/                 evidence images referenced from code comments
+deploy/               systemd units, Caddyfile and the hosting guide (see deploy/README.md)
 ```
 
 ## How a run works

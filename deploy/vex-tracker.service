@@ -1,0 +1,29 @@
+# The site itself. Copy to /etc/systemd/system/, then:
+#   sudo systemctl enable --now vex-tracker
+[Unit]
+Description=VEX Tracker (read-only site)
+After=network.target
+
+[Service]
+User=vex
+WorkingDirectory=/srv/vex-tracker
+Environment=VEX_READ_ONLY=1
+# One worker with threads, not several processes: the pages are cheap and the
+# catalog is parsed per process, so four workers would hold four copies of it
+# for no gain.
+ExecStart=/srv/vex-tracker/.venv/bin/gunicorn \
+    --workers 1 --threads 8 --timeout 60 \
+    --bind 127.0.0.1:8000 \
+    webapp.server:app
+Restart=on-failure
+RestartSec=5
+
+# The process needs to read the code and write nothing but its own logs.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/vex-tracker/data
+
+[Install]
+WantedBy=multi-user.target

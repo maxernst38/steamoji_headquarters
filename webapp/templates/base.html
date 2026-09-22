@@ -97,6 +97,20 @@ document.addEventListener('click', (event) => {
   });
 });
 
+// A .video-play button swaps itself for the player when pressed, so a page
+// with footage on it contacts YouTube only when someone asks to watch.
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('.video-play');
+  if (!button || !button.dataset.embed) return;
+  const frame = document.createElement('iframe');
+  frame.src = button.dataset.embed;
+  frame.title = button.getAttribute('aria-label') || 'Video';
+  frame.allow = 'accelerometer; encrypted-media; picture-in-picture; fullscreen';
+  frame.allowFullscreen = true;
+  frame.className = 'video-frame';
+  button.replaceWith(frame);
+});
+
 // A button with data-toggle="<id>" shows and hides that panel. Used for the
 // Add forms, which are POST forms and so cannot sit inside the filter form the
 // way the Filters <details> does.
