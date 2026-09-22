@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_learn_blocks.html" import node, video_block, photo %}
+{% block title %}{{ guide.title }} · Learn · VEX Tracker{% endblock %}
+{% block heading %}{{ guide.title }}{% endblock %}
+{% block subheading %}
+  <a href="/learn">Learn</a> · <a href="/learn/{{ section.slug }}">{{ section.title }}</a>
+  {%- if guide.level %} · {{ guide.level }}{% endif %}
+  {%- if guide.minutes %} · {{ guide.minutes }} min read{% endif %}
+{% endblock %}
+
+{% block content %}
+<article class="guide">
+  {% if guide.cover %}
+  <div class="guide-cover">{{ photo(guide.cover) }}</div>
+  {% endif %}
+
+  {% if guide.summary %}<p class="guide-summary">{{ guide.summary }}</p>{% endif %}
+
+  {% if guide.videos %}
+  <div class="guide-videos">
+    {% for video in guide.videos %}{{ video_block(video) }}{% endfor %}
+  </div>
+  {% endif %}
+
+  {% for item in guide.nodes %}{{ node(item) }}{% endfor %}
+
+  {% if guide.photos_missing %}
+  <p class="note">
+    {{ guide.photos_missing }} photo{{ '' if guide.photos_missing == 1 else 's' }} still to add.
+    Each placeholder above names the file it wants, under
+    <span class="mono">webapp/static/learn/</span>.
+  </p>
+  {% endif %}
+
+  <nav class="guide-nav">
+    {% if previous %}<a href="{{ previous.url }}">← {{ previous.title }}</a>{% endif %}
+    <a href="/learn/{{ section.slug }}">All {{ section.title|lower }} guides</a>
+    {% if next %}<a href="{{ next.url }}">{{ next.title }} →</a>{% endif %}
+  </nav>
+</article>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// The YouTube player is inserted only when someone presses play, so a guide
+// page contacts YouTube when it is asked to and not before.
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('.video-play');
+  if (!button || !button.dataset.embed) return;
+  const frame = document.createElement('iframe');
+  frame.src = button.dataset.embed;
+  frame.title = button.getAttribute('aria-label') || 'Video';
+  frame.allow = 'accelerometer; encrypted-media; picture-in-picture; fullscreen';
+  frame.allowFullscreen = true;
+  frame.className = 'video-frame';
+  button.replaceWith(frame);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,22 @@
+# The Learn tab's six sections, in the order they are shown.
+#
+# A category is a folder of guides under content/learn/<slug>/. Adding one is a
+# folder plus an entry here; nothing in the code needs to change.
+- slug: fundamentals
+  title: Fundamentals
+  blurb: The hardware, the tools, and the habits everything else is built on.
+- slug: mechanical
+  title: Mechanical
+  blurb: Drivetrains, lifts, intakes and the parts that move.
+- slug: electronics
+  title: Electronics
+  blurb: Brain, motors, sensors, battery, and wiring that survives a match.
+- slug: programming
+  title: Programming
+  blurb: Driver control, autonomous routines, and making sensors useful.
+- slug: strategy
+  title: Strategy
+  blurb: Reading the game, planning a match, and picking an alliance.
+- slug: notebook
+  title: Notebook
+  blurb: Recording the design process, and what judges are actually looking for.

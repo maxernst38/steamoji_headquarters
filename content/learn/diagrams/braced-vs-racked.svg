@@ -1,0 +1,26 @@
+<svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg">
+  <!-- A rectangle is a hinge until something triangulates it. -->
+  <defs>
+    <marker id="push" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--bad)"/>
+    </marker>
+  </defs>
+
+  <g transform="translate(70 40)">
+    <rect x="0" y="0" width="250" height="150" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="4"/>
+    <line x1="0" y1="0" x2="250" y2="150" stroke="var(--good)" stroke-width="5"/>
+    <line x1="290" y1="-18" x2="258" y2="-2" stroke="var(--bad)" stroke-width="3" marker-end="url(#push)"/>
+    <text class="title" x="125" y="188" text-anchor="middle">Braced</text>
+    <text class="label" x="125" y="208" text-anchor="middle">The brace makes two triangles. It holds.</text>
+  </g>
+
+  <g transform="translate(430 40)">
+    <!-- same frame, same push, no brace: the corners hinge over -->
+    <path d="M34 0 L284 0 L250 150 L0 150 Z" fill="var(--panel)" stroke="var(--line)" stroke-width="4"/>
+    <line x1="322" y1="-18" x2="290" y2="-2" stroke="var(--bad)" stroke-width="3" marker-end="url(#push)"/>
+    <circle cx="34" cy="0" r="6" fill="none" stroke="var(--bad)" stroke-width="2.5"/>
+    <circle cx="284" cy="0" r="6" fill="none" stroke="var(--bad)" stroke-width="2.5"/>
+    <text class="title" x="142" y="188" text-anchor="middle">Unbraced</text>
+    <text class="label" x="142" y="208" text-anchor="middle">Every corner is a hinge. It racks over.</text>
+  </g>
+</svg>

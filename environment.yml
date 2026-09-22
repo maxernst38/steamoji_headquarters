@@ -7,3 +7,5 @@ dependencies:
   - pip
   - pip:
       - opencv-python
+      - markdown            # renders the Learn guides in content/learn/
+      - pyyaml              # the header block on each guide

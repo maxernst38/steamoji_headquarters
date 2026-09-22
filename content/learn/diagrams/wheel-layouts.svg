@@ -1,0 +1,60 @@
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg">
+  <!-- Three drivetrain layouts, seen from above. Colours come from the page,
+       so this drawing works in both programs' themes. -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- Tank -->
+  <g transform="translate(40 20)">
+    <rect x="20" y="10" width="140" height="150" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="2"/>
+    <g fill="var(--muted)">
+      <rect x="0" y="26" width="24" height="46" rx="5"/>
+      <rect x="0" y="98" width="24" height="46" rx="5"/>
+      <rect x="156" y="26" width="24" height="46" rx="5"/>
+      <rect x="156" y="98" width="24" height="46" rx="5"/>
+    </g>
+    <line x1="90" y1="120" x2="90" y2="46" stroke="var(--accent)" stroke-width="3" marker-end="url(#arrow)"/>
+    <text class="title" x="90" y="196" text-anchor="middle">Tank</text>
+    <text class="label" x="90" y="216" text-anchor="middle">Drives and turns. Hard to push.</text>
+  </g>
+
+  <!-- Mecanum -->
+  <g transform="translate(290 20)">
+    <rect x="20" y="10" width="140" height="150" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="2"/>
+    <g fill="var(--muted)">
+      <rect x="0" y="26" width="24" height="46" rx="5"/>
+      <rect x="0" y="98" width="24" height="46" rx="5"/>
+      <rect x="156" y="26" width="24" height="46" rx="5"/>
+      <rect x="156" y="98" width="24" height="46" rx="5"/>
+    </g>
+    <!-- rollers at 45 degrees, mirrored across the diagonals -->
+    <g stroke="var(--bg)" stroke-width="2" opacity="0.9">
+      <path d="M2 40 l20 -12 M2 54 l20 -12 M2 68 l20 -12"/>
+      <path d="M2 112 l20 12 M2 126 l20 12 M2 140 l20 12"/>
+      <path d="M158 28 l20 12 M158 42 l20 12 M158 56 l20 12"/>
+      <path d="M158 124 l20 -12 M158 138 l20 -12 M158 152 l20 -12"/>
+    </g>
+    <line x1="90" y1="120" x2="90" y2="46" stroke="var(--accent)" stroke-width="3" marker-end="url(#arrow)"/>
+    <line x1="64" y1="85" x2="118" y2="85" stroke="var(--accent)" stroke-width="3" marker-end="url(#arrow)"/>
+    <text class="title" x="90" y="196" text-anchor="middle">Mecanum</text>
+    <text class="label" x="90" y="216" text-anchor="middle">Strafes sideways. Pushes poorly.</text>
+  </g>
+
+  <!-- X-drive -->
+  <g transform="translate(540 20)">
+    <rect x="20" y="10" width="140" height="150" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="2"/>
+    <g fill="var(--muted)">
+      <rect x="6" y="18" width="24" height="46" rx="5" transform="rotate(45 18 41)"/>
+      <rect x="150" y="18" width="24" height="46" rx="5" transform="rotate(-45 162 41)"/>
+      <rect x="6" y="106" width="24" height="46" rx="5" transform="rotate(-45 18 129)"/>
+      <rect x="150" y="106" width="24" height="46" rx="5" transform="rotate(45 162 129)"/>
+    </g>
+    <line x1="90" y1="120" x2="90" y2="46" stroke="var(--accent)" stroke-width="3" marker-end="url(#arrow)"/>
+    <line x1="62" y1="113" x2="118" y2="57" stroke="var(--accent)" stroke-width="3" marker-end="url(#arrow)"/>
+    <text class="title" x="90" y="196" text-anchor="middle">X-drive</text>
+    <text class="label" x="90" y="216" text-anchor="middle">Any direction at once. Pushes worst.</text>
+  </g>
+</svg>

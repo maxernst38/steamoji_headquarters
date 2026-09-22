@@ -1,22 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Learn · VEX Tracker{% endblock %}
 {% block heading %}Learn{% endblock %}
-{% block subheading %}{{ program.name }} · under construction{% endblock %}
+{% block subheading %}
+  How a {{ program.label }} robot works, one part at a time ·
+  {{ total }} guide{{ '' if total == 1 else 's' }} across {{ sections|length }} sections
+{% endblock %}
 
 {% block content %}
+{% if not total %}
 <div class="panel">
   <div class="stub">
-    <h3>Under construction</h3>
+    <h3>No guides yet for {{ program.label }}</h3>
     <p>
-      Learn will hold written guides to the parts of a robot &mdash; the drivetrain, the
-      mechanisms, the electronics, the code &mdash; with photos and video walkthroughs.
-      It is being written on a branch and will land here when there is enough of it to be
-      worth reading.
-    </p>
-    <p class="note" style="margin-top:14px">
-      Scouting data is under <a href="/">Scout</a>, and how every number there is worked out
-      is on <a href="/help">How it's calculated</a>.
+      Guides live in <span class="mono">content/learn/&lt;section&gt;/</span> as Markdown files.
+      A guide shows up here as soon as its file exists and its header lists this program.
     </p>
   </div>
+</div>
+{% endif %}
+
+<div class="learn-sections">
+  {% for section in sections %}
+  <a class="learn-card" href="/learn/{{ section.slug }}">
+    <span class="learn-card-cover">
+      {%- if section.guides and section.guides[0].cover and not section.guides[0].cover.missing %}
+      <img src="{{ section.guides[0].cover.thumb }}" alt="" loading="lazy">
+      {%- else %}<span class="learn-card-blank" aria-hidden="true">{{ section.title[0] }}</span>{% endif %}
+    </span>
+    <span class="learn-card-body">
+      <strong>{{ section.title }}</strong>
+      <span class="muted">{{ section.blurb }}</span>
+      <span class="note">{{ section.count }} guide{{ '' if section.count == 1 else 's' }}</span>
+    </span>
+  </a>
+  {% endfor %}
 </div>
 {% endblock %}

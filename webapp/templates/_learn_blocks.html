@@ -1,0 +1,87 @@
+{# How each block from webapp/learn.py is drawn. Every one of these uses the
+   site's own tokens, so a guide themes with the program switch like any other
+   page. A photo that has not been taken yet draws as a labelled placeholder
+   naming the file it expects. #}
+
+{% macro photo(image, class="") %}
+  {%- if image and not image.missing %}
+  <img class="{{ class }}" src="{{ image.src }}" alt="{{ image.alt or '' }}" loading="lazy">
+  {%- elif image %}
+  <span class="photo-missing {{ class }}" title="Add this photo to webapp/static/learn/{{ image.path }}">
+    <strong>Photo to add</strong>
+    <span class="mono">{{ image.path }}</span>
+    {%- if image.alt %}<span class="muted">{{ image.alt }}</span>{% endif %}
+  </span>
+  {%- endif %}
+{% endmacro %}
+
+{% macro video_block(video) %}
+<figure class="guide-video">
+  {%- if video.id %}
+  <button type="button" class="video-play" data-embed="{{ video.embed }}"
+          style="background-image:url('{{ video.poster }}')" aria-label="Play {{ video.title }}">
+    <span class="video-play-mark" aria-hidden="true">▶</span>
+  </button>
+  {%- else %}
+  <a href="{{ video.url }}" target="_blank" rel="noopener noreferrer">{{ video.title }} ↗</a>
+  {%- endif %}
+  <figcaption>{{ video.title }}{% if video.caption %} — {{ video.caption|safe }}{% endif %}</figcaption>
+</figure>
+{% endmacro %}
+
+{% macro node(item) %}
+  {%- if item.kind == 'prose' %}
+  <div class="prose">{{ item.html|safe }}</div>
+
+  {%- elif item.kind == 'figure' %}
+  <figure class="guide-figure">
+    {{ photo(item.image) }}
+    {%- if item.caption %}<figcaption>{{ item.caption|safe }}</figcaption>{% endif %}
+  </figure>
+
+  {%- elif item.kind == 'compare' %}
+  <figure class="guide-compare">
+    <div class="compare-pair">
+      {%- for side in (item.left, item.right) if side %}
+      <div class="compare-side">
+        {{ photo(side) }}
+        <span class="compare-label">{{ side.label }}</span>
+      </div>
+      {%- endfor %}
+    </div>
+    {%- if item.caption %}<figcaption>{{ item.caption|safe }}</figcaption>{% endif %}
+  </figure>
+
+  {%- elif item.kind == 'steps' %}
+  <ol class="guide-steps">
+    {%- for step in item.steps %}
+    <li>
+      <div class="step-text">{{ step.html|safe }}</div>
+      {%- if step.photo %}<div class="step-photo">{{ photo(step.photo) }}</div>{% endif %}
+    </li>
+    {%- endfor %}
+  </ol>
+
+  {%- elif item.kind == 'callout' %}
+  <aside class="callout callout-{{ item.tone }}">
+    <span class="callout-label">{{ 'Watch out' if item.tone == 'warning' else ('Tip' if item.tone == 'tip' else 'Note') }}</span>
+    <div class="prose">{{ item.html|safe }}</div>
+  </aside>
+
+  {%- elif item.kind == 'diagram' %}
+  <figure class="guide-diagram">
+    {%- if item.svg %}
+    <div class="diagram-frame" role="img" aria-label="{{ item.title }}">{{ item.svg|safe }}</div>
+    {%- else %}
+    <span class="photo-missing">
+      <strong>Diagram to draw</strong>
+      <span class="mono">content/learn/diagrams/{{ item.name }}</span>
+    </span>
+    {%- endif %}
+    {%- if item.caption %}<figcaption>{{ item.caption|safe }}</figcaption>{% endif %}
+  </figure>
+
+  {%- elif item.kind == 'video' %}
+  {{ video_block(item) }}
+  {%- endif %}
+{% endmacro %}
