@@ -13,8 +13,34 @@
 {% endblock %}
 
 {% block content %}
+{# A Teamwork match is two teams and one score. The catalog still stores it as
+   a red and a blue side, because that is how the API reports it, but showing
+   it that way would read as a match against a partner. #}
+{% set coop = program.scoring == 'cooperative' %}
 <div class="panel">
-  <h2>Alliances</h2>
+  <h2>{{ 'Teams' if coop else 'Alliances' }}</h2>
+  {% if coop %}
+  <form method="post" action="/match/{{ match.key }}/alliances" class="form">
+    <label>Teams<input name="red" class="mono" value="{{ match.alliances.red.teams|join(', ') }}" placeholder="838J"></label>
+    <label>Partner<input name="blue" class="mono" value="{{ match.alliances.blue.teams|join(', ') }}" placeholder="478X"></label>
+    <label>Score<input name="red_score" type="number" value="{{ match.alliances.red.score if match.alliances.red.score is not none else '' }}"></label>
+    {# blue_score is not sent: the route copies the one score onto both sides. #}
+    <div class="form-actions"><button type="submit">Save teams</button></div>
+  </form>
+  <div class="row">
+    {% set pair = match.alliances.red.teams + match.alliances.blue.teams %}
+    {% for t in pair %}<a href="/team/{{ t }}" class="mono">{{ t }}</a>{{ '+' if not loop.last }}{% endfor %}
+    {% if not pair %}<span class="muted">not recorded</span>{% endif %}
+    {% if match.alliances.red.score is not none %}
+    <span class="tag saved">{{ match.alliances.red.score }} points</span>
+    {% endif %}
+    {% if match.alliances.red.score is not none and match.alliances.blue.score is not none
+          and match.alliances.red.score != match.alliances.blue.score %}
+    <span class="tag missing" title="Both sides of a Teamwork match should carry the same score">
+      the two sides disagree: {{ match.alliances.red.score }} / {{ match.alliances.blue.score }}</span>
+    {% endif %}
+  </div>
+  {% else %}
   <form method="post" action="/match/{{ match.key }}/alliances" class="form">
     <label>Red teams<input name="red" class="mono" value="{{ match.alliances.red.teams|join(', ') }}" placeholder="929U, 1234A"></label>
     <label>Red score<input name="red_score" type="number" value="{{ match.alliances.red.score if match.alliances.red.score is not none else '' }}"></label>
@@ -29,6 +55,7 @@
     {% if not match.alliances[colour].teams %}<span class="muted">not recorded</span>{% endif %}
     {% endfor %}
   </div>
+  {% endif %}
 </div>
 
 <div class="panel">

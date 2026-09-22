@@ -5,14 +5,21 @@
   {{ team.organization or 'Organization not recorded' }}
   {%- if team.location and team.location.city %} · {{ team.location.city }}{% if team.location.region %}, {{ team.location.region }}{% endif %}{% endif %}
   {%- if team.grade %} · {{ team.grade }}{% endif %}
+  {%- if media.channel %} ·
+  <a href="{{ media.channel.url }}" target="_blank" rel="noopener noreferrer"
+     title="{{ media.channel.reason }}{{ ' — found automatically' if media.channel.source == 'auto' else ' — confirmed' }}">▶ YouTube: {{ media.channel.title }} ↗</a>
+  {%- endif %}
 {% endblock %}
 
 {% block content %}
+{# A Teamwork match has no opponent, so record, win rate, the power ratings and
+   the opposing-alliance columns have nothing behind them here. #}
+{% set coop = program.scoring == 'cooperative' %}
 <div class="tabs">
   <button class="tab on" data-tab="season">Season</button>
   <button class="tab" data-tab="matches">Matches ({{ matches|length }})</button>
   <button class="tab" data-tab="robot">Robot analysis</button>
-  <button class="tab" data-tab="videos">Videos ({{ videos|length }})</button>
+  <button class="tab" data-tab="videos">Videos ({{ videos|length + media.videos|length }})</button>
 </div>
 
 <section id="tab-season">
@@ -20,6 +27,15 @@
     <h2>Season</h2>
     <div class="cards">
       <div class="card"><span class="k">Matches</span><span class="v">{{ record.matches }}</span></div>
+      {% if coop %}
+      <div class="card">
+        <span class="k">Average</span>
+        <span class="v">{{ record.avg_score if record.avg_score is not none else '—' }}</span>
+        <span class="f">from {{ record.scored_matches }} scored</span>
+      </div>
+      <div class="card"><span class="k">High score</span><span class="v">{{ record.high_score if record.high_score is not none else '—' }}</span></div>
+      <div class="card"><span class="k">Total</span><span class="v">{{ record.total_score if record.total_score is not none else '—' }}</span></div>
+      {% else %}
       <div class="card">
         <span class="k">Record</span>
         <span class="v">{% if record.scored_matches %}{{ record.wins }}–{{ record.losses }}–{{ record.ties }}{% else %}—{% endif %}</span>
@@ -31,21 +47,36 @@
       </div>
       <div class="card"><span class="k">Avg for</span><span class="v">{{ record.avg_score if record.avg_score is not none else '—' }}</span></div>
       <div class="card"><span class="k">Avg against</span><span class="v">{{ record.avg_conceded if record.avg_conceded is not none else '—' }}</span></div>
+      {% endif %}
       <div class="card"><span class="k">Events</span><span class="v">{{ record.events|length }}</span></div>
       <div class="card"><span class="k">With footage</span><span class="v">{{ videos|length }}</span></div>
       <div class="card"><span class="k">Analysed</span><span class="v">{{ analysed_count }}</span></div>
     </div>
     {% if not record.scored_matches %}
     <p class="note">
-      No scores have been entered for this team's matches, so record and averages are blank
-      rather than zero. Add them on a match page.
+      No scores have been entered for this team's matches, so
+      {{ 'the averages are' if coop else 'record and averages are' }} blank rather than zero.
+      Add them on a match page.
+    </p>
+    {% elif coop %}
+    <p class="note">
+      A Teamwork match is played with another team for a single shared score, so these are
+      scoring figures, not a record — there is nobody to beat.
     </p>
     {% endif %}
   </div>
 
   <div class="panel">
-    <h2>Power ratings</h2>
-    {% if rated %}
+    <h2>{{ 'Scoring' if coop else 'Power ratings' }}</h2>
+    {% if coop %}
+    <p class="note">
+      OPR, DPR, CCWM and Elo all measure a team against an opponent: OPR separates a team from
+      its partners by what the two alliances scored, and Elo moves on a win or a loss. A
+      Teamwork match has neither, so none of them are computed for {{ program.label }} — the
+      scoring figures above are the season view, and each event's own ranking is on the event
+      page.
+    </p>
+    {% elif rated %}
     <div class="cards">
       <div class="card"><span class="k">Avg CCWM</span><span class="v">{{ season.ccwm if season.ccwm is not none else '—' }}</span><span class="f">over {{ season.rated_events }} event{{ '' if season.rated_events == 1 else 's' }}</span></div>
       <div class="card"><span class="k">Avg OPR</span><span class="v">{{ season.opr if season.opr is not none else '—' }}</span></div>
@@ -101,8 +132,9 @@
     {% if partners %}
     <table>
       <thead><tr><th>Team</th><th>Name</th><th class="right">Together</th>
-        <th class="right">Eliminations</th><th class="right">Record</th>
-        <th class="right">Win rate</th></tr></thead>
+        <th class="right">Eliminations</th>
+        {%- if not coop %}<th class="right">Record</th><th class="right">Win rate</th>{% endif %}
+      </tr></thead>
       <tbody>
         {% for p in partners[:12] %}
         <tr>
@@ -110,8 +142,10 @@
           <td class="muted">{{ all_teams.get(p.team, {}).get('name') or '—' }}</td>
           <td class="num right">{{ p.matches }}</td>
           <td class="num right">{% if p.eliminations %}<strong>{{ p.eliminations }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+          {%- if not coop %}
           <td class="num right">{% if p.scored_matches %}{{ p.wins }}–{{ p.losses }}–{{ p.ties }}{% else %}<span class="muted">—</span>{% endif %}</td>
           <td class="num right">{{ '%.0f%%'|format(p.win_rate * 100) if p.win_rate is not none else '—' }}</td>
+          {%- endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -158,8 +192,11 @@
     {% if matches %}
     <table>
       <thead><tr>
-        <th>Date</th><th>Event</th><th>Match</th><th>Side</th><th>Partners</th><th>Opponents</th>
-        <th class="right">Score</th><th class="right">Result</th><th>Analysis</th>
+        <th>Date</th><th>Event</th><th>Match</th>
+        {%- if coop %}<th>Played with</th><th class="right">Score</th>
+        {%- else %}<th>Side</th><th>Partners</th><th>Opponents</th>
+        <th class="right">Score</th><th class="right">Result</th>{% endif %}
+        <th>Analysis</th>
       </tr></thead>
       <tbody>
         {% for row in matches %}
@@ -177,11 +214,16 @@
               {{ events.get(row.match.event, {}).get('name', row.match.event)[:38] }}</a>
           </td>
           <td><a href="/match/{{ row.match.key }}"><strong>{{ row.match.name }}</strong></a></td>
+          {%- if coop %}
+          <td class="num">{% for t in row.partners %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not row.partners }}</td>
+          <td class="num right">{% if row.score is not none %}{{ row.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          {%- else %}
           <td><span class="side {{ row.side }}">{{ row.side or '—' }}</span></td>
           <td class="num">{% for t in row.partners %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not row.partners }}</td>
           <td class="num">{% for t in row.opponents %}<a href="/team/{{ t }}">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not row.opponents }}</td>
           <td class="num right">{% if row.score is not none %}{{ row.score }}–{{ row.against }}{% else %}<span class="muted">—</span>{% endif %}</td>
           <td class="num right">{% if row.outcome %}<span class="res {{ row.outcome }}">{{ row.outcome }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          {%- endif %}
           <td>
             {% if row.status.analysed %}<span class="tag ok">analysed</span>
             {% elif row.status.ready %}<span class="tag saved">ready to run</span>
@@ -223,8 +265,84 @@
 </section>
 
 <section id="tab-videos" hidden>
+  {% macro media_form(action, kind, item, label, cls='secondary') -%}
+  <form method="post" action="/team/{{ team.number }}/media" class="inline-form"
+        {% if action == 'remove' %}onsubmit="return confirm('Remove this {{ kind }}? It will not be added back automatically.')"{% endif %}>
+    <input type="hidden" name="action" value="{{ action }}">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <input type="hidden" name="id" value="{{ item.id }}">
+    <button type="submit" class="small {{ cls }}">{{ label }}</button>
+  </form>
+  {%- endmacro %}
+  {% macro video_card(video, suggestion=False) -%}
+  <div class="video-card">
+    <a href="{{ video.url }}" target="_blank" rel="noopener noreferrer" class="video-thumb">
+      {% if video.thumbnail %}<img src="{{ video.thumbnail }}" alt="" loading="lazy">{% endif %}
+    </a>
+    <div class="video-body">
+      <a href="{{ video.url }}" target="_blank" rel="noopener noreferrer" class="video-title">{{ video.title }}</a>
+      <div class="video-meta">
+        {{ video.published or '' }}
+        {%- if video.channel_title %} · {{ video.channel_title }}{% endif %}
+      </div>
+      <div class="video-meta">
+        <span class="tag {{ 'ok' if video.season == 'current' }}">{{ 'This season' if video.season == 'current' else 'Earlier season' }}</span>
+        <span class="tag" title="{{ video.reason }}">{{ 'suggested' if suggestion else ('found automatically' if video.source == 'auto' else 'confirmed') }}</span>
+      </div>
+      <div class="video-actions">
+        {% if suggestion %}{{ media_form('confirm', 'video', video, 'Confirm', '') }}{% endif %}
+        {{ media_form('remove', 'video', video, 'Remove') }}
+      </div>
+    </div>
+  </div>
+  {%- endmacro %}
+
   <div class="panel">
-    <h2>Videos</h2>
+    <h2>Robot videos</h2>
+    {% if media.channel %}
+    <div class="row" style="margin-top:0">
+      <a href="{{ media.channel.url }}" target="_blank" rel="noopener noreferrer"><button type="button">▶ {{ media.channel.title }} ↗</button></a>
+      <span class="tag" title="{{ media.channel.reason }}">{{ 'found automatically' if media.channel.source == 'auto' else 'confirmed' }}</span>
+      {% if media.channel.kind == 'organization' %}<span class="tag" title="Shared by the club's teams, so not every video there is this team's">club channel</span>{% endif %}
+      {{ media_form('remove', 'channel', media.channel, 'Remove channel') }}
+    </div>
+    {% endif %}
+    {% if media.videos %}
+    <div class="video-grid">
+      {% for video in media.videos %}{{ video_card(video) }}{% endfor %}
+    </div>
+    {% elif media.checked %}
+    <p class="note">No robot videos found{{ ' on the channel above or' if media.channel }} in a YouTube search (last checked {{ media.checked }}).</p>
+    {% else %}
+    <p class="note">
+      Not searched yet. The daily search reaches every team in turn, or run
+      <span class="mono">python -m integrations.youtube --team {{ team.number }}</span> now.
+    </p>
+    {% endif %}
+
+    {% set suggestion_count = media.channel_suggestions|length + media.video_suggestions|length %}
+    {% if suggestion_count %}
+    <details class="suggestions">
+      <summary>{{ suggestion_count }} suggestion{{ '' if suggestion_count == 1 else 's' }} — found, but not certain enough to show</summary>
+      {% for channel in media.channel_suggestions %}
+      <div class="row">
+        <a href="{{ channel.url }}" target="_blank" rel="noopener noreferrer">▶ {{ channel.title }} ↗</a>
+        <span class="note">{{ channel.reason }}</span>
+        {{ media_form('confirm', 'channel', channel, 'Use this channel', '') }}
+        {{ media_form('remove', 'channel', channel, 'Not theirs') }}
+      </div>
+      {% endfor %}
+      {% if media.video_suggestions %}
+      <div class="video-grid">
+        {% for video in media.video_suggestions %}{{ video_card(video, True) }}{% endfor %}
+      </div>
+      {% endif %}
+    </details>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Match footage</h2>
     {% if videos %}
     <div class="list">
       {% for row in videos %}

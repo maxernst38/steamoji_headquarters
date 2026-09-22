@@ -32,8 +32,10 @@
       </select>
       <select name="region" aria-label="Region">
         <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
-        {% for group, count in region_counts.items() %}
-        <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
+        {# The US as a whole, then its regions indented under it. #}
+        {% for option in region_options %}
+        <option value="{{ option.value }}" {{ 'selected' if option.value == region }}
+        >{% if option.sub %}&nbsp;&nbsp;&nbsp;{% endif %}{{ option.label }} ({{ option.count }})</option>
         {% endfor %}
       </select>
       <select name="status" aria-label="Status">
@@ -100,7 +102,7 @@
         <td class="num right">
           <strong>{{ imp.score }}</strong>
           <span class="bar-mini"><span style="width:{{ imp.score }}%"></span></span>
-          <div class="imp-parts" title="level {{ imp.level }} ({{ imp.level_score }}) · {{ imp.size }} teams ({{ imp.size_score }}){% if imp.strength_score is not none %} · field strength {{ imp.strength_score }} from {{ imp.rated_teams }} rated team(s){% else %} · field strength unknown — no rated teams yet{% endif %}">
+          <div class="imp-parts" title="level {{ imp.level }} ({{ imp.level_score }}) · {{ imp.size }} teams ({{ imp.size_score }}){% if imp.strength_score is not none %} · field strength {{ imp.strength_score }} from {{ imp.rated_teams }} rated team(s){% elif program.scoring == 'cooperative' %} · field strength does not apply: it is mean Elo, which cooperative play has none of{% else %} · field strength unknown — no rated teams yet{% endif %}">
             {{ imp.level_score }}/{{ imp.size_score }}/{{ imp.strength_score if imp.strength_score is not none else '·' }}
           </div>
         </td>

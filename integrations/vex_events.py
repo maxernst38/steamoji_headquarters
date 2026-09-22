@@ -39,6 +39,13 @@ TOKEN_ENV = "VEX_EVENTS_TOKEN"
 TOKEN_FILE = os.path.join("data", "vex_token")
 CACHE_DIR = os.path.join("data", "cache", "vex_events")
 
+# Each program has its own catalog, because team numbers are reused between
+# them; see webapp/programs.py, which is where the site reads the same split.
+PROGRAM_CATALOGS = {
+    "v5rc": os.path.join("data", "catalog"),
+    "viqrc": os.path.join("data", "catalog_viqrc"),
+}
+
 MAX_PER_PAGE = 250
 DEFAULT_TIMEOUT = 45
 
@@ -538,9 +545,19 @@ def import_season(season_id, client=None, region=None, with_teams=True,
     Safe to re-run. Every response is cached, so a second pass over an
     unchanged season makes no requests at all and simply re-saves identical
     records - which is also how an interrupted run is resumed.
+
+    `refresh` takes a callable as well as a bool: given the event payload it
+    answers whether that event should be re-fetched rather than served from
+    cache. That is what makes a routine update affordable - a season is mostly
+    events that finished months ago and cannot change, and re-fetching all of
+    them costs an hour to learn nothing. The season listing itself is always
+    re-fetched when `refresh` is a callable, because a cached listing cannot
+    contain an event that was announced since.
     """
     client = client or Client()
-    events = find_events(client, season_id=season_id, region=region, refresh=refresh)
+    per_event = callable(refresh)
+    events = find_events(client, season_id=season_id, region=region,
+                         refresh=True if per_event else refresh)
     events.sort(key=lambda e: (e.get("start") or "", e.get("sku") or ""))
     if log:
         log(f"{len(events)} event(s) in season {season_id}"
@@ -549,10 +566,13 @@ def import_season(season_id, client=None, region=None, with_teams=True,
     totals = {"events": 0, "teams": 0, "matches": 0,
               "past": 0, "ongoing": 0, "upcoming": 0, "unknown": 0}
     failures = []
+    refreshed = 0
     for index, payload in enumerate(events, start=1):
+        fetch = bool(refresh(payload)) if per_event else refresh
+        refreshed += 1 if fetch else 0
         try:
             counts = _store_event(payload, client, with_teams, with_matches,
-                                  refresh, directory, log=None, with_details=with_details)
+                                  fetch, directory, log=None, with_details=with_details)
         except VexEventsError as error:
             failures.append((payload.get("sku"), f"{type(error).__name__}: {error}"))
             if on_error != "continue":
@@ -581,7 +601,8 @@ def import_season(season_id, client=None, region=None, with_teams=True,
                 continue
             try:
                 counts = _store_event(payload, client, with_teams, with_matches,
-                                      refresh, directory, log=None, with_details=with_details)
+                                      bool(refresh(payload)) if per_event else refresh,
+                                      directory, log=None, with_details=with_details)
             except VexEventsError as error:
                 still.append((sku, f"{type(error).__name__}: {error}"))
                 continue
@@ -596,10 +617,12 @@ def import_season(season_id, client=None, region=None, with_teams=True,
             f"({totals['past']} past, {totals['ongoing']} ongoing, {totals['upcoming']} upcoming), "
             f"{totals['matches']} matches, {len(catalog.list_teams(directory))} teams")
         log(f"  {client.requests_made} requests, {client.cache_hits} from cache, "
-            f"{len(failures)} still failing")
+            f"{len(failures)} still failing"
+            + (f", {refreshed} event(s) re-fetched" if per_event else ""))
         for sku, why in failures:
             log(f"  FAILED {sku}: {why[:90]}")
     totals["failures"] = failures
+    totals["refreshed"] = refreshed if per_event else None
     return totals
 
 
@@ -615,12 +638,17 @@ def main():
     parser.add_argument("--no-details", action="store_true",
                         help="skip awards, rankings and skills")
     parser.add_argument("--refresh", action="store_true", help="ignore the cache")
+    parser.add_argument("--program", choices=sorted(PROGRAM_CATALOGS), default="v5rc",
+                        help="which program's catalog to import into (default v5rc)")
+    parser.add_argument("--directory", help="catalog directory, overriding --program")
     args = parser.parse_args()
 
     if not (args.sku or args.season):
         parser.error("give an event SKU or --season")
+    directory = args.directory or PROGRAM_CATALOGS[args.program]
     common = dict(with_teams=not args.no_teams, with_matches=not args.no_matches,
-                  with_details=not args.no_details, refresh=args.refresh)
+                  with_details=not args.no_details, refresh=args.refresh,
+                  directory=directory)
     if args.season:
         import_season(args.season, region=args.region, **common)
     else:

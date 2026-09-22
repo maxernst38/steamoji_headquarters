@@ -54,6 +54,40 @@ def group_of(location):
     return _STATE_TO_REGION.get((location.get("region") or "").strip(), US_OTHER)
 
 
+def covers(group, chosen):
+    """Does `group` fall under the chosen filter value?
+
+    Exact match, except that the country as a whole covers all of its regions:
+    picking "United States" means every US bucket, including "Other".
+    """
+    if not chosen:
+        return True
+    if chosen == US:
+        return group == US or group.startswith(f"{US} · ")
+    return group == chosen
+
+
+def options(counts):
+    """The region menu: [{value, label, count, sub}], US regions under the US.
+
+    The country as a whole is offered alongside its parts because the two
+    answer different questions - "who might we meet at nationals" against "who
+    do we face most weekends" - and only the second one was selectable before.
+    Its count is the sum of its regions, so a menu reading 2,003 for the US and
+    120 for the Pacific Northwest is consistent rather than double-counted.
+    """
+    rows = []
+    total = sum(count for group, count in counts.items() if covers(group, US))
+    if total:
+        rows.append({"value": US, "label": US, "count": total, "sub": False})
+    for group, count in counts.items():
+        sub = group.startswith(f"{US} · ")
+        rows.append({"value": group,
+                     "label": group[len(US) + 3:] if sub else group,
+                     "count": count, "sub": sub})
+    return rows
+
+
 def sort_key(group):
     """US regions first, then countries A-Z, with Unknown last.
 
@@ -62,6 +96,8 @@ def sort_key(group):
     """
     if group == "Unknown":
         return (3, "")
+    if group == US:
+        return (0, "")
     if group.startswith(f"{US} · "):
         return (0, group)
     return (1, group)

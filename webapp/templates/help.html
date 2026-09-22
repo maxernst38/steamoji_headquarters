@@ -7,7 +7,43 @@
 {% endblock %}
 
 {% block content %}
+{% set coop = program.scoring == 'cooperative' %}
 
+{% if coop %}
+<div class="panel">
+  <h2>{{ program.label }}: what is and is not calculated</h2>
+  <p class="note">
+    A {{ program.label }} Teamwork match is cooperative. Two teams play together for a single
+    score, which the API reports on both sides of the match, and there is no opponent. Every
+    rating below — Elo, OPR, DPR, CCWM — measures a team <em>against</em> somebody, so none of
+    them are computed for this program. Read as alliance play, every Teamwork match is a tie and
+    every team's record is 0–0–N with a 0% win rate; that is why those columns are absent rather
+    than filled with zeroes.
+  </p>
+  <table>
+    <thead><tr><th>Figure</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td>Average</td><td class="muted">Mean Teamwork score across every match with a score
+        recorded. The fairest single column to rank on, and what seeds an event.</td></tr>
+      <tr><td>High score</td><td class="muted">The team's best single match. One strong partner
+        can produce it, so it says less on its own than the average does.</td></tr>
+      <tr><td>Total</td><td class="muted">Every point scored this season. It rewards playing
+        more events as much as scoring well, so compare it only between teams with similar
+        match counts.</td></tr>
+      <tr><td>Qualification rank</td><td class="muted">The event's own ranking, imported rather
+        than derived, ordered by average score.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">
+    Event importance below still applies, minus its field-strength term: that term is the mean
+    Elo of the registered teams, and there is no Elo here. Those events score on level and size
+    alone, which the <span class="mono">level/size/strength</span> breakdown shows as a
+    <span class="mono">·</span> in the third position.
+  </p>
+</div>
+{% endif %}
+
+{% if not coop %}
 <div class="panel">
   <h2>Elo</h2>
   <p class="note">
@@ -102,6 +138,8 @@ CCWM = OPR - DPR</pre>
   </p>
 </div>
 
+{% endif %}
+
 <div class="panel">
   <h2>Event importance</h2>
   <p class="note">
@@ -174,6 +212,13 @@ CCWM = OPR - DPR</pre>
   <table>
     <thead><tr><th>Number</th><th>How it works</th></tr></thead>
     <tbody>
+      {% if coop %}
+      <tr><td>Scoring figures</td><td class="muted">Only from matches with a score recorded. A team
+        with none shows “—”, never 0.</td></tr>
+      <tr><td>Allies</td><td class="muted">Who a team has played Teamwork with. The partner sits on
+        the opposite side of the stored match, because that is how the API reports a Teamwork
+        pairing — read as alliance play, every team would appear to have no partners at all.</td></tr>
+      {% else %}
       <tr><td>Record and win rate</td><td class="muted">Only from matches with both scores recorded.
         A team with none shows “—”, never 0–0–0, which would read as “played and never won”.</td></tr>
       <tr><td>Team OPR/DPR/CCWM in the teams table</td><td class="muted">Averaged across that team's
@@ -182,6 +227,7 @@ CCWM = OPR - DPR</pre>
       <tr><td>Allies</td><td class="muted">Sorted by elimination partnerships first. A qualification
         partner is a random draw; an elimination partner was chosen in alliance selection. The
         record shown is the pair's record in matches they played together.</td></tr>
+      {% endif %}
       <tr><td>Event grade</td><td class="muted">Derived from the grades of registered teams, never
         from the event name — checked against known rosters, names were wrong or silent about 45%
         of the time. Called for a grade at {{ (grade_majority * 100)|int }}% or more of one grade,
@@ -189,10 +235,17 @@ CCWM = OPR - DPR</pre>
       <tr><td>Match dates</td><td class="muted">Exact where the schedule has a time. Every
         elimination match lacks one, so those show the event's date range in italics.</td></tr>
       <tr><td>Regions</td><td class="muted">The US is split into seven regions and everywhere else
-        grouped by country, mirroring who a team actually competes against.</td></tr>
+        grouped by country, mirroring who a team actually competes against. The whole United
+        States is selectable too, above its regions in the menu — its count is the sum of
+        them, including the “Other” bucket that catches an unrecognised state.</td></tr>
+      {% if not coop %}
       <tr><td>Elimination bracket</td><td class="muted">Derived from matches, never stored, so it
         cannot disagree with them. Series are decided by which set of teams won more games, not by
         alliance colour.</td></tr>
+      {% endif %}
+      <tr><td>Programs</td><td class="muted">{{ program.label }} and the other program keep separate
+        catalogs. Team numbers are reused between them, so one table keyed by number would merge two
+        different teams into one record.</td></tr>
     </tbody>
   </table>
 </div>
