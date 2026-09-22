@@ -18,6 +18,8 @@ safe to hold at once.
 """
 import os
 
+from storage import paths
+
 # `scoring` is the difference that matters downstream. A V5RC match has two
 # alliances and a winner; a VIQRC Teamwork match has two teams playing together
 # for one score that both of them carry, so wins, win rate, Elo and OPR are not
@@ -37,8 +39,8 @@ PROGRAMS = {
         "label": "VEX V5",
         "name": "VEX V5 Robotics Competition",
         "scoring": ALLIANCE,
-        "catalog_dir": os.path.join("data", "catalog"),
-        "media_file": os.path.join("data", "team_media.json"),
+        "catalog_dir": paths.path("catalog"),
+        "media_file": paths.path("team_media.json"),
         "season_id": 204,
     },
     "viqrc": {
@@ -48,8 +50,8 @@ PROGRAMS = {
         "label": "VEX IQ",
         "name": "VEX IQ Robotics Competition",
         "scoring": COOPERATIVE,
-        "catalog_dir": os.path.join("data", "catalog_viqrc"),
-        "media_file": os.path.join("data", "team_media_viqrc.json"),
+        "catalog_dir": paths.path("catalog_viqrc"),
+        "media_file": paths.path("team_media_viqrc.json"),
         "season_id": 203,
     },
 }

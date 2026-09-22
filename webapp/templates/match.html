@@ -60,7 +60,39 @@
 
 <div class="panel">
   <h2>Footage</h2>
+
+  {# An event is streamed as one long video, so a match is a timestamp inside
+     it. The player loads only when someone presses play, and starts there. #}
+  {% if footage %}
+  <figure class="match-footage">
+    {%- if footage.embed %}
+    <button type="button" class="video-play" data-embed="{{ footage.embed }}"
+            style="background-image:url('{{ footage.poster }}')"
+            aria-label="Play this match{% if footage.clock %} from {{ footage.clock }}{% endif %}">
+      <span class="video-play-mark" aria-hidden="true">▶</span>
+    </button>
+    {%- endif %}
+    <figcaption>
+      <a href="{{ footage.watch }}" target="_blank" rel="noopener noreferrer">
+        Watch on {{ 'YouTube' if footage.youtube else 'the source site' }} ↗</a>
+      {%- if footage.clock %} · starts at <span class="mono">{{ footage.clock }}</span>{% endif %}
+    </figcaption>
+  </figure>
+  {% elif event_status == 'upcoming' %}
+  <p class="note">
+    This event has not happened yet, so there is no footage to link and any scores shown are
+    placeholders from the schedule rather than results.
+  </p>
+  {% else %}
+  <p class="note">No footage linked for this match yet.</p>
+  {% endif %}
+
+  {% if not read_only %}
   <form method="post" action="/match/{{ match.key }}/video" class="form">
+    <label>Stream URL<input name="url" value="{{ match.video.url or '' if match.video else '' }}"
+           placeholder="https://youtube.com/watch?v=…"></label>
+    <label>Starts at<input name="watch_start" value="{{ footage.clock if footage and footage.clock else '' }}"
+           placeholder="12:34 — or leave blank to read it from the link"></label>
     <label>Video file
       <select name="video_file">
         <option value="">— none —</option>
@@ -71,17 +103,15 @@
     </label>
     <label>Start frame<input name="start_frame" type="number" value="{{ match.video.start_frame if match.video else '' }}"></label>
     <label>End frame<input name="end_frame" type="number" value="{{ match.video.end_frame if match.video else '' }}"></label>
-    <label>Source URL<input name="url" value="{{ match.video.url or '' if match.video else '' }}" placeholder="optional — where the stream came from"></label>
     <div class="form-actions"><button type="submit">Save footage</button></div>
   </form>
-
-  {% if event_status == 'upcoming' %}
   <p class="note">
-    This event has not happened yet, so there is no footage to link and any scores shown are
-    placeholders from the schedule rather than results.
+    A link and a start time are enough. The file and frame range are only needed to run the
+    tracker on this machine.
   </p>
   {% endif %}
-  {% if status.video %}
+
+  {% if status.video and not read_only %}
   <div class="row">
     <span class="tag {{ 'ok' if status.field else 'missing' }}">field {{ 'drawn' if status.field else 'not drawn' }}</span>
     <span class="tag {{ 'ok' if status.robots else 'missing' }}">robots {{ 'marked' if status.robots else 'not marked' }}</span>
@@ -91,8 +121,9 @@
     Setup and processing still live on the workspace page. They are canvas tools that have not
     moved here yet; the link opens this exact segment rather than making you find it again.
   </p>
-  {% else %}
-  <p class="note">No footage linked, so there is nothing to analyse. Pick a file and frame range above.</p>
+  {% elif not read_only %}
+  <p class="note">No local video linked, so there is nothing to analyse here. A stream link is
+    enough for watching; a file and frame range are what the tracker needs.</p>
   {% endif %}
 </div>
 

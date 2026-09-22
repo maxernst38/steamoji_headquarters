@@ -1,0 +1,29 @@
+# TLS, automatically. Caddy gets and renews the certificate itself; there is
+# no certbot step and no renewal to forget.
+#
+#   sudo cp Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#
+# Replace the domain with yours, pointed at this server with an A record.
+
+scout.example.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:8000
+
+    # The site is read-only, so this is not protecting data - it is keeping a
+    # scouting database off search engines and out of other teams' hands. To
+    # make the site public instead, delete this block.
+    basic_auth {
+        # Generate the hash with:  caddy hash-password
+        team $2a$14$REPLACE_THIS_WITH_A_REAL_HASH
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    log {
+        output file /var/log/caddy/vex-tracker.log
+    }
+}

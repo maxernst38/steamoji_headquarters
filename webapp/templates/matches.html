@@ -34,9 +34,12 @@
         <input type="checkbox" name="footage" value="1" {{ 'checked' if footage_only }}> With footage only
       </label>
     {% endcall %}
+    {% if not read_only %}
     <button type="button" class="add-toggle" data-toggle="add-panel" aria-controls="add-panel" aria-expanded="false">+ Add match</button>
+    {% endif %}
     </div>
   </form>
+  {% if not read_only %}
   <div id="add-panel" class="add-panel" hidden>
   {% if events %}
   <form method="post" action="/matches/new" class="form">
@@ -88,6 +91,7 @@
   <p class="note">Create an <a href="/events">event</a> first — a match belongs to one.</p>
   {% endif %}
   </div>
+  {% endif %}
   {% if rows %}
   <table>
     <thead><tr><th>Date</th><th>Event</th><th>Match</th>
@@ -114,7 +118,11 @@
         <td class="num">{% for t in blue.teams %}<a href="/team/{{ t }}" class="side blue">{{ t }}</a>{{ ' ' if not loop.last }}{% endfor %}{{ '—' if not blue.teams }}</td>
         <td class="num right">{% if red.score is not none and blue.score is not none %}{{ red.score }}–{{ blue.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
         {%- endif %}
-        <td class="muted mono">{% if row.match.video and row.match.video.file %}{{ row.match.video.start_frame }}–{{ row.match.video.end_frame }}{% else %}—{% endif %}</td>
+        <td class="muted mono">
+          {%- if row.footage %}<a href="{{ row.footage.watch }}" target="_blank" rel="noopener noreferrer"
+            title="{{ row.footage.url }}">▶ {{ row.footage.clock or 'watch' }}</a>
+          {%- elif row.match.video and row.match.video.file %}{{ row.match.video.start_frame }}–{{ row.match.video.end_frame }}
+          {%- else %}—{% endif %}</td>
         <td>
           {% if row.status.analysed %}<span class="tag ok">analysed</span>
           {% elif row.status.ready %}<span class="tag saved">ready to run</span>

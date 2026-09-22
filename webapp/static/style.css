@@ -585,3 +585,37 @@ button.small { padding: 4px 10px; font-size: 12px; }
 details.suggestions { margin-top: 16px; }
 details.suggestions > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 
+
+/* Footage: one long event stream, played from the match's timestamp. The
+   poster is a button until someone presses it, so nothing loads from YouTube
+   until it is asked for. */
+.match-footage { margin: 0 0 4px; max-width: 640px; }
+.video-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background-color: var(--sunken);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
+.video-play-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 22px;
+  padding-left: 4px;
+}
+.video-play:hover .video-play-mark { transform: scale(1.06); }
+.video-frame { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; }
+.match-footage figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }

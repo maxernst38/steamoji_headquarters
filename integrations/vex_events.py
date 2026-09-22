@@ -28,6 +28,8 @@ Three things measured against a real event (RE-V5RC-26-4244, 118 teams,
 import hashlib
 import json
 import os
+
+from storage import paths
 import time
 
 import requests
@@ -36,14 +38,14 @@ from storage import catalog, event_details
 
 BASE_URL = "https://events.vex.com/api/v2"
 TOKEN_ENV = "VEX_EVENTS_TOKEN"
-TOKEN_FILE = os.path.join("data", "vex_token")
-CACHE_DIR = os.path.join("data", "cache", "vex_events")
+TOKEN_FILE = paths.path("vex_token")
+CACHE_DIR = paths.path("cache", "vex_events")
 
 # Each program has its own catalog, because team numbers are reused between
 # them; see webapp/programs.py, which is where the site reads the same split.
 PROGRAM_CATALOGS = {
-    "v5rc": os.path.join("data", "catalog"),
-    "viqrc": os.path.join("data", "catalog_viqrc"),
+    "v5rc": paths.path("catalog"),
+    "viqrc": paths.path("catalog_viqrc"),
 }
 
 MAX_PER_PAGE = 250

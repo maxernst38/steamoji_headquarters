@@ -1,0 +1,18 @@
+# Midnight, in the server's timezone. Set that to your own:
+#   sudo timedatectl set-timezone America/Los_Angeles
+# which also lines the run up with YouTube's quota reset, which is midnight
+# Pacific.
+[Unit]
+Description=Refresh VEX Tracker data every night
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+# Runs a missed night on the next boot instead of skipping the day - the whole
+# point of a timer over cron.
+Persistent=true
+# Two minutes of jitter, so this is not one more request hitting the API
+# exactly on the hour with everyone else's cron job.
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

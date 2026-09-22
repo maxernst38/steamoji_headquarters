@@ -12,12 +12,13 @@ reattaches to a running job instead of losing it.
 import base64
 import datetime as _dt
 import os
+
+from storage import paths
 import threading
 import traceback
 import uuid
 from urllib.parse import quote
 
-import cv2
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory
 
 from storage import calibration_store
@@ -27,19 +28,38 @@ from storage import regions
 from storage import webcasts
 from storage import team_media
 from webapp import programs
+from webapp import videolinks
 from analysis import bracket as bracket_module
 from analysis import importance as importance_module
 from analysis import ratings as ratings_module
-import numpy as np
 from storage import results_store
 from storage import seed_store
-from calibration.background import median_background
-from calibration.field import FIELD_SIZE_IN
-from calibration.field_layout import resolve_alliance_owners
-from calibration.homography import compute_homography, load_calibration
-from detection.motion import field_mask, find_seed_frame
-from detection.segments import find_segments
-from pipeline import MissingSetup, RESULTS_DIR, run_tracking
+# Set on the hosted copy, unset locally. See `local_only` below.
+#
+# Forced on Vercel, which sets VERCEL itself: a serverless deployment has no
+# writable disk, so the write routes could not work there even if someone
+# deployed without setting the flag. Better to be read-only by construction
+# than to depend on a dashboard setting being remembered.
+READ_ONLY = (os.environ.get("VEX_READ_ONLY", "").strip().lower() in ("1", "true", "yes")
+             or bool(os.environ.get("VERCEL")))
+
+# Everything below belongs to the video workspace, and every one of these
+# pulls in OpenCV - about 90MB installed, and useless on a server that holds
+# no video. A read-only deployment therefore never imports them, and needs
+# neither OpenCV nor NumPy's presence here; the routes that use them are not
+# registered either. RESULTS_DIR is spelled out rather than imported so the
+# results store still resolves.
+RESULTS_DIR = paths.path("results")
+if not READ_ONLY:
+    import cv2
+    import numpy as np
+    from calibration.background import median_background
+    from calibration.field import FIELD_SIZE_IN
+    from calibration.field_layout import resolve_alliance_owners
+    from calibration.homography import compute_homography, load_calibration
+    from detection.motion import field_mask, find_seed_frame
+    from detection.segments import find_segments
+    from pipeline import MissingSetup, RESULTS_DIR, run_tracking
 
 # Rows rendered per page. The whole-table-in-the-page approach worked at one
 # event and stopped working at a season: 613 teams already produced 323KB of
@@ -116,6 +136,17 @@ app = Flask(__name__, static_folder="static", static_url_path="/static",
 # like the edit not having worked. The cost is an mtime check per render.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
+
+
+# A read-only server does not register the routes that change anything, or the
+# video workspace - not 403, absent - so there is no surface to defend and no
+# password needed in front of the site. Local use keeps every form, because
+# adding matches and running the tracker is the workflow this tool exists for.
+def local_only(route):
+    """Register a route only where this is the working copy, not the server."""
+    def decorate(view):
+        return view if READ_ONLY else route(view)
+    return decorate
 
 # One job at a time: the work is GPU-bound, so queueing more would only hide
 # contention behind a longer wait.
@@ -209,7 +240,7 @@ def _run_job(job_id, video_path, calibration, start, end, stride, prefix):
         traceback.print_exc()
 
 
-@app.route("/workspace")
+@local_only(app.route("/workspace"))
 def workspace():
     """The original video-first flow: pick a video, pick a segment, set up, run.
 
@@ -219,17 +250,17 @@ def workspace():
     return send_from_directory(app.static_folder, "index.html")
 
 
-@app.route("/api/config")
+@local_only(app.route("/api/config"))
 def api_config():
     return jsonify({"preselect": PRESELECT_VIDEO})
 
 
-@app.route("/api/videos")
+@local_only(app.route("/api/videos"))
 def api_videos():
     return jsonify({"videos": _list_videos()})
 
 
-@app.route("/api/segments")
+@local_only(app.route("/api/segments"))
 def api_segments():
     """Detected matches within a video, so the user never types frame numbers."""
     name = request.args.get("video", "")
@@ -242,7 +273,7 @@ def api_segments():
     return jsonify({"segments": _segment_cache[path]})
 
 
-@app.route("/api/results")
+@local_only(app.route("/api/results"))
 def api_results():
     """The saved result for a match, or null - so the page can offer it instead
     of spending fifteen minutes recomputing something already done."""
@@ -260,7 +291,7 @@ def api_results():
     return jsonify({"result": _result_payload(record) if record else None})
 
 
-@app.route("/api/setup")
+@local_only(app.route("/api/setup"))
 def api_setup():
     """Whether this match has its field drawn and its robots marked.
 
@@ -286,7 +317,7 @@ def api_setup():
     })
 
 
-@app.route("/api/field")
+@local_only(app.route("/api/field"))
 def api_field():
     """A frame to draw the field quad on, plus whatever was drawn before."""
     name = os.path.basename(request.args.get("video", ""))
@@ -314,7 +345,7 @@ def api_field():
     })
 
 
-@app.route("/api/field", methods=["POST"])
+@local_only(app.route("/api/field", methods=["POST"]))
 def api_save_field():
     payload = request.get_json(silent=True) or {}
     name = os.path.basename(payload.get("video", ""))
@@ -352,7 +383,7 @@ def api_save_field():
     return jsonify({"saved": True, "warning": warning})
 
 
-@app.route("/api/seed-frame")
+@local_only(app.route("/api/seed-frame"))
 def api_seed_frame():
     """A frame to draw robot boxes on, with the automatic guess as a starting point.
 
@@ -397,7 +428,7 @@ def api_seed_frame():
     })
 
 
-@app.route("/api/seeds", methods=["POST"])
+@local_only(app.route("/api/seeds", methods=["POST"]))
 def api_save_seeds():
     payload = request.get_json(silent=True) or {}
     name = os.path.basename(payload.get("video", ""))
@@ -436,7 +467,7 @@ def _frame_jpeg(video_path, frame_index):
     return base64.b64encode(buffer).decode() if ok else None
 
 
-@app.route("/api/jobs", methods=["POST"])
+@local_only(app.route("/api/jobs", methods=["POST"]))
 def api_start_job():
     payload = request.get_json(force=True) or {}
     name = os.path.basename(payload.get("video", ""))
@@ -492,7 +523,7 @@ def api_start_job():
     return jsonify({"job_id": job_id})
 
 
-@app.route("/api/jobs/<job_id>")
+@local_only(app.route("/api/jobs/<job_id>"))
 def api_job(job_id):
     with _jobs_lock:
         job = _jobs.get(job_id)
@@ -501,7 +532,7 @@ def api_job(job_id):
         return jsonify({k: v for k, v in job.items() if k != "log"} | {"log": job["log"][-12:]})
 
 
-@app.route("/api/jobs")
+@local_only(app.route("/api/jobs"))
 def api_jobs():
     """Lets a reloaded page find the job that is still running."""
     with _jobs_lock:
@@ -510,7 +541,7 @@ def api_jobs():
         ]})
 
 
-@app.route("/media/<path:name>")
+@local_only(app.route("/media/<path:name>"))
 def media(name):
     leaf = os.path.basename(name)
     for directory in (RESULTS_DIR,):
@@ -587,6 +618,7 @@ def _program_context():
     # costs a stat per table rather than a parse.
     empty = not (_teams(code) or _events(code) or _matches(code))
     return {"program": chosen, "programs": programs.ordered(), "tab": "scout",
+            "read_only": READ_ONLY,
             "program_empty": empty, "here": request.full_path.rstrip("?") or "/",
             "asset_version": _asset_version()}
 
@@ -840,6 +872,7 @@ def _team_rows(number, matches):
             "score": mine.get("score"),
             "against": None if coop else theirs.get("score"),
             "outcome": catalog.outcome(match, number, _scoring()),
+            "footage": _footage(match),
             "status": _match_status(match),
             "when": _match_when(match, events.get(str(match.get("event") or "").upper())),
         })
@@ -987,7 +1020,7 @@ def page_team(number):
         partners=catalog.partners(matches, number, _scoring()), all_teams=_teams(),
         record=catalog.team_record(matches, number, _scoring()),
         matches=rows,
-        videos=[r for r in rows if r["status"]["video"]],
+        videos=[r for r in rows if r["status"]["video"] or r["footage"]],
         analysed_count=sum(1 for r in rows if r["status"]["analysed"]),
         events=_events(),
         media=_team_media(number),
@@ -1016,7 +1049,7 @@ def _team_media(number):
     }
 
 
-@app.route("/team/<number>/media", methods=["POST"])
+@local_only(app.route("/team/<number>/media", methods=["POST"]))
 def page_team_media(number):
     """Confirm a suggested channel or video, or remove one for good."""
     team = catalog.get_team(number, _dir())
@@ -1206,6 +1239,7 @@ def page_matches():
     return render_template("matches.html", section="matches", events=events,
                            selectable=selectable, addable=addable, chosen=chosen,
                            rows=[{"match": m, "status": _match_status(m),
+                                  "footage": _footage(m),
                                   "when": _match_when(m, events.get(str(m.get("event") or "").upper()))}
                                  for m in window],
                            rounds=catalog.ROUNDS, videos=_list_videos(),
@@ -1421,16 +1455,37 @@ def _optional_int(raw):
 
 
 def _video_field(form):
+    """The footage record: a link with a start time, a local segment, or both.
+
+    An event is streamed as one long video, so a match is a timestamp inside
+    it rather than a video of its own. A link alone is now enough to record -
+    it used to need a local file and a frame range, which meant footage could
+    only be recorded on a machine holding the video.
+    """
     name = os.path.basename((form.get("video_file") or "").strip())
     start = _optional_int(form.get("start_frame"))
     end = _optional_int(form.get("end_frame"))
-    if not name or start is None or end is None:
-        return None
-    return {"file": name, "start_frame": start, "end_frame": end,
-            "url": (form.get("url") or "").strip() or None}
+    url = (form.get("url") or "").strip()
+    at = videolinks.parse_time(form.get("watch_start"))
+    if at is None:
+        at = videolinks.start_in_url(url)
+
+    record = {}
+    if name and start is not None and end is not None:
+        record.update({"file": name, "start_frame": start, "end_frame": end})
+    if url:
+        record["url"] = url
+        record["watch_start"] = at
+    return record or None
 
 
-@app.route("/events/new", methods=["POST"])
+def _footage(match):
+    """The match's YouTube link, ready to render, or None."""
+    video = (match or {}).get("video") or {}
+    return videolinks.describe(video.get("url"), video.get("watch_start"))
+
+
+@local_only(app.route("/events/new", methods=["POST"]))
 def page_add_event():
     form = request.form
     name = (form.get("name") or "").strip()
@@ -1449,7 +1504,7 @@ def page_add_event():
     return redirect(f"/matches?event={event['key']}")
 
 
-@app.route("/matches/new", methods=["POST"])
+@local_only(app.route("/matches/new", methods=["POST"]))
 def page_add_match():
     form = request.form
     event = (form.get("event") or "").strip()
@@ -1489,12 +1544,13 @@ def page_match(key):
         event=event, when=_match_when(match, event),
         round_label=catalog.ROUND_LABELS.get(match.get("round"), "Unspecified"),
         event_status=catalog.event_status(catalog.get_event(match.get("event"), _dir())),
+        footage=_footage(match),
         status=status, result=status["result"] and _result_payload(status["result"]),
         videos=_list_videos(), workspace_url=workspace,
     )
 
 
-@app.route("/match/<path:key>/alliances", methods=["POST"])
+@local_only(app.route("/match/<path:key>/alliances", methods=["POST"]))
 def page_match_alliances(key):
     match = catalog.get_match(key, _dir())
     if match is None:
@@ -1516,7 +1572,7 @@ def page_match_alliances(key):
     return redirect(f"/match/{key}")
 
 
-@app.route("/match/<path:key>/video", methods=["POST"])
+@local_only(app.route("/match/<path:key>/video", methods=["POST"]))
 def page_match_video(key):
     match = catalog.get_match(key, _dir())
     if match is None:

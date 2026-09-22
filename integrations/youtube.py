@@ -35,6 +35,8 @@ import datetime
 import hashlib
 import json
 import os
+
+from storage import paths
 import re
 import time
 import zoneinfo
@@ -45,8 +47,8 @@ from storage import catalog, regions, team_media
 
 API_URL = "https://www.googleapis.com/youtube/v3"
 KEY_ENV = "YOUTUBE_API_KEY"
-KEY_FILE = os.path.join("data", "youtube_key")
-CACHE_DIR = os.path.join("data", "cache", "youtube")
+KEY_FILE = paths.path("youtube_key")
+CACHE_DIR = paths.path("cache", "youtube")
 QUOTA_FILE = os.path.join(CACHE_DIR, "quota.json")
 
 DAILY_QUOTA = 10_000

@@ -11,11 +11,13 @@ so a quad can never be silently reused across a camera change.
 """
 import json
 import os
+
+from storage import paths
 import time
 
 import numpy as np
 
-CALIBRATION_DIR = os.path.join("data", "calibrations")
+CALIBRATION_DIR = paths.path("calibrations")
 
 
 def _slug(text):

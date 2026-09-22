@@ -21,11 +21,13 @@ import contextlib
 import datetime as _dt
 import json
 import os
+
+from storage import paths
 import re
 import threading
 import time
 
-CATALOG_DIR = os.path.join("data", "catalog")
+CATALOG_DIR = paths.path("catalog")
 
 TEAMS_FILE = "teams.json"
 EVENTS_FILE = "events.json"
