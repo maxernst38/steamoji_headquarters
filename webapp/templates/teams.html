@@ -7,31 +7,69 @@
 {% endblock %}
 
 {% block content %}
+{% set grade_short = {'High School': 'HS', 'Middle School': 'MS', 'Elementary School': 'ES'} %}
+{% macro team_cell(row, key) -%}
+  {%- if key == 'number' %}<td class="num"><a href="/team/{{ row.number }}"><strong>{{ row.number }}</strong></a></td>
+  {%- elif key == 'name' %}<td>{{ row.name or '—' }}</td>
+  {%- elif key == 'organization' %}<td class="muted">{{ row.organization or '—' }}</td>
+  {%- elif key == 'location' %}<td class="muted">{{ row.location or '—' }}</td>
+  {%- elif key == 'grade' %}<td class="muted" title="{{ row.grade or '' }}">{{ grade_short.get(row.grade, row.grade or '—') }}</td>
+  {%- elif key == 'wins' %}<td class="num right">{% if row.scored_matches %}{{ row.wins }}–{{ row.losses }}–{{ row.ties }}{% else %}<span class="muted">—</span>{% endif %}</td>
+  {%- elif key == 'win_rate' %}<td class="num right">{{ '%.0f%%'|format(row.win_rate * 100) if row.win_rate is not none else '—' }}</td>
+  {%- elif key == 'channel' %}<td class="channel-cell">
+    {%- if row.channel %}<a href="{{ row.channel_url }}" target="_blank" rel="noopener noreferrer"
+      title="{{ row.channel }}{% if row.channel_reason %} — {{ row.channel_reason }}{% endif %}{{ ' — confirmed' if row.channel_confirmed else ' — found automatically' }}"
+      >▶ {{ row.channel|truncate(22, true, '…') }}</a>{% if row.channel_club %} <span class="tag">club</span>{% endif %}
+    {%- elif row.channel_suggested %}<a href="/team/{{ row.number }}#videos" class="muted"
+      title="{{ row.channel_suggested }} channel(s) found, none certain enough to attach">{{ row.channel_suggested }} suggested</a>
+    {%- else %}<span class="muted">—</span>{% endif %}</td>
+  {%- elif key == 'elo' %}<td class="num right">{{ row.elo|round|int if row.elo is not none else '—' }}</td>
+  {%- else %}<td class="num right">{{ row[key] if row[key] is not none else '—' }}</td>
+  {%- endif %}
+{%- endmacro %}
+
 <div class="panel">
-  <div class="row" style="margin-top:0">
-  <form method="get" action="/" class="row" style="margin-top:0;width:100%">
-    <input id="filter" name="q" class="search mono" type="search"
-           placeholder="Search by team number, name or organization"
-           value="{{ query or '' }}" autocomplete="off" autofocus>
-    <select name="grade" onchange="this.form.submit()">
-      <option value="">HS and MS</option>
-      {% for g, n in grade_counts.items() %}
-      <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
-      {% endfor %}
-    </select>
-    <select name="region" onchange="this.form.submit()">
-      <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
-      {% for group, count in region_counts.items() %}
-      <option value="{{ group }}" {{ 'selected' if group == region }}>{{ group }} ({{ count }})</option>
-      {% endfor %}
-    </select>
-    <input type="hidden" name="sort" value="{{ sort }}">
-    <input type="hidden" name="dir" value="{{ dir }}">
-    <button type="submit">Search</button>
-    {% if query or region %}<a href="/?region={{ all_regions }}"><button type="button" class="secondary">Clear</button></a>{% endif %}
-    <span class="note" id="filter-count"></span>
+  {% from "_filters.html" import filter_menu %}
+  <form method="get" action="/" class="filter-form">
+    <div class="row" style="margin-top:0">
+      <input id="filter" name="q" class="search mono" type="search"
+             placeholder="Search by team number, name or organization"
+             value="{{ query or '' }}" autocomplete="off" autofocus>
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <input type="hidden" name="dir" value="{{ dir }}">
+      <button type="submit">Search</button>
+      {% if query or region or grade or org %}<a href="/?region={{ all_regions }}"><button type="button" class="secondary">Clear</button></a>{% endif %}
+      <span class="note" id="filter-count"></span>
+    </div>
+    {% call filter_menu([grade, region, org]|select|list) %}
+      <select name="grade" aria-label="Grade">
+        <option value="">{{ 'All grades' if program.scoring == 'cooperative' else 'HS and MS' }}</option>
+        {% for g, n in grade_counts.items() %}
+        <option value="{{ g }}" {{ 'selected' if g == grade }}>{{ g }} ({{ n }})</option>
+        {% endfor %}
+      </select>
+      <select name="region" aria-label="Region">
+        <option value="{{ all_regions }}" {{ 'selected' if not region }}>All regions</option>
+        {# The US as a whole, then its regions indented under it. #}
+        {% for option in region_options %}
+        <option value="{{ option.value }}" {{ 'selected' if option.value == region }}
+        >{% if option.sub %}&nbsp;&nbsp;&nbsp;{% endif %}{{ option.label }} ({{ option.count }})</option>
+        {% endfor %}
+      </select>
+      {% if region %}
+      <select name="org" aria-label="Organization">
+        <option value="">All organizations ({{ org_options|length }})</option>
+        {% for label, count in org_options %}
+        <option value="{{ label }}" {{ 'selected' if label == org }}>{{ label }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <select aria-label="Organization" disabled title="Pick a region to filter by organization">
+        <option>Pick a region first</option>
+      </select>
+      {% endif %}
+    {% endcall %}
   </form>
-  </div>
 
   {% if rows %}
   <table id="teams-table">
@@ -42,7 +80,7 @@
            its own natural default rather than inheriting the last one. #}
         {% set flipped = ('asc' if dir == 'desc' else 'desc') if sort == key else ('desc' if numeric else 'asc') %}
         <th class="{{ 'right' if numeric }} sortable {{ 'sorted' if sort == key }}">
-          <a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}{% if region %}region={{ region|urlencode }}&amp;{% endif %}{% if grade %}grade={{ grade|urlencode }}&amp;{% endif %}sort={{ key }}&amp;dir={{ flipped }}">
+          <a href="?{% if query %}q={{ query|urlencode }}&amp;{% endif %}region={{ (region or all_regions)|urlencode }}&amp;{% if grade %}grade={{ grade|urlencode }}&amp;{% endif %}{% if org %}org={{ org|urlencode }}&amp;{% endif %}sort={{ key }}&amp;dir={{ flipped }}">
             {{ label }}<span class="arrow">{{ ('▾' if dir == 'desc' else '▴') if sort == key else '' }}</span>
           </a>
         </th>
@@ -52,22 +90,7 @@
     <tbody>
       {% for row in rows %}
       <tr data-search="{{ (row.number ~ ' ' ~ (row.name or '') ~ ' ' ~ (row.organization or '') ~ ' ' ~ (row.location or ''))|lower }}">
-        <td class="num"><a href="/team/{{ row.number }}"><strong>{{ row.number }}</strong></a></td>
-        <td>{{ row.name or '—' }}</td>
-        <td class="muted">{{ row.organization or '—' }}</td>
-        <td class="muted">{{ row.location or '—' }}</td>
-        <td class="muted">{{ 'HS' if row.grade == 'High School' else ('MS' if row.grade == 'Middle School' else (row.grade or '—')) }}</td>
-        <td class="num right">{{ row.matches }}</td>
-        <td class="num right">
-          {% if row.scored_matches %}{{ row.wins }}–{{ row.losses }}–{{ row.ties }}
-          {% else %}<span class="muted">—</span>{% endif %}
-        </td>
-        <td class="num right">{{ '%.0f%%'|format(row.win_rate * 100) if row.win_rate is not none else '—' }}</td>
-        <td class="num right">{{ row.ccwm if row.ccwm is not none else '—' }}</td>
-        <td class="num right">{{ row.opr if row.opr is not none else '—' }}</td>
-        <td class="num right">{{ row.dpr if row.dpr is not none else '—' }}</td>
-        <td class="num right">{{ row.elo|round|int if row.elo is not none else '—' }}</td>
-        <td class="num right">{{ row.with_video }}</td>
+        {%- for key, label, numeric in columns %}{{ team_cell(row, key) }}{% endfor %}
       </tr>
       {% endfor %}
     </tbody>
@@ -104,9 +127,19 @@
   Sorting applies to every matching team before the list is cut to {{ limit }}, so the top of a
   sorted column is the real top and not just the best of what was already on screen.
   Teams with no value for the sorted column are kept last in both directions.
-  Record comes only from matches with scores recorded, so a team with none shows “—”
-  rather than a 0–0–0 that would read as “played and never won”.
+  {% if program.scoring == 'cooperative' %}Scores come only from matches that have one recorded,
+  so a team with none shows “—”.{% else %}Record comes only from matches with scores recorded, so
+  a team with none shows “—” rather than a 0–0–0 that would read as “played and never won”.{% endif %}
 </p>
+{% if program.scoring == 'cooperative' %}
+<p class="note">
+  A <strong>{{ program.label }}</strong> Teamwork match is cooperative: two teams play together
+  for one score, which both of them carry. There is no opponent, so there is no record, no win
+  rate and no OPR — <strong>Average</strong>, <strong>High score</strong> and
+  <strong>Total</strong> are what the format actually measures. Average is the fairer column to
+  rank on; a high score can come from one good run with a strong partner.
+</p>
+{% else %}
 <p class="note">
   <strong>CCWM, OPR and DPR</strong> are least-squares estimates of what a team contributes
   regardless of its partners, averaged over that team's events. They are only strictly
@@ -115,6 +148,7 @@
   real numbers. <strong>Elo</strong> does carry across events that share teams, but only within
   a connected pool; 76% of rated teams are in the largest.
 </p>
+{% endif %}
 {% endif %}
 {% endblock %}
 

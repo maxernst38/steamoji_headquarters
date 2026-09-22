@@ -24,6 +24,9 @@ from storage import calibration_store
 from storage import catalog
 from storage import event_details
 from storage import regions
+from storage import webcasts
+from storage import team_media
+from webapp import programs
 from analysis import bracket as bracket_module
 from analysis import importance as importance_module
 from analysis import ratings as ratings_module
@@ -60,10 +63,29 @@ TEAM_COLUMNS = (
     ("opr", "OPR", True),
     ("dpr", "DPR", True),
     ("elo", "Elo", True),
+    ("channel", "YouTube", False),
     ("with_video", "Footage", True),
 )
+# The same table under cooperative scoring. Record, win rate and the
+# least-squares ratings are all built on beating an opponent, which a Teamwork
+# match does not have, so what IQ actually measures takes their place.
+TEAM_COLUMNS_COOP = (
+    ("number", "Team", False),
+    ("name", "Name", False),
+    ("organization", "Organization", False),
+    ("location", "Location", False),
+    ("grade", "Grade", False),
+    ("matches", "Matches", True),
+    ("avg_score", "Average", True),
+    ("high_score", "High score", True),
+    ("total_score", "Total", True),
+    ("channel", "YouTube", False),
+    ("with_video", "Footage", True),
+)
+
 TEAM_COLUMN_KEYS = {key for key, _, _ in TEAM_COLUMNS}
 DEFAULT_TEAM_SORT = "elo"
+DEFAULT_TEAM_SORT_COOP = "avg_score"
 
 # Scouting is local, so the region you compete in is a better starting view than
 # every team in the world. "all" is the explicit opt-out rather than an empty
@@ -538,24 +560,139 @@ def _match_status(match):
             "path": path, "result": result}
 
 
+# --- programs -------------------------------------------------------------
+#
+# V5RC and VIQRC share these pages entirely; the program decides which records
+# they are drawn from and which palette they are drawn in. Every read of the
+# catalog goes through the three helpers below rather than through `catalog`
+# directly, so a page cannot accidentally show one program's data inside the
+# other's colours.
+
+
+def _program():
+    """The program this request is looking at."""
+    return programs.get(programs.current(request))
+
+
+@app.context_processor
+def _program_context():
+    """`program`, `programs` and `here` for every template.
+
+    `tab` is defaulted here and overridden by whatever a view passes, so only
+    the Learn and Practice views have to name their tab.
+    """
+    chosen = _program()
+    code = chosen["code"]
+    # Three cached reads: the catalog is parsed once per file change, so this
+    # costs a stat per table rather than a parse.
+    empty = not (_teams(code) or _events(code) or _matches(code))
+    return {"program": chosen, "programs": programs.ordered(), "tab": "scout",
+            "program_empty": empty, "here": request.full_path.rstrip("?") or "/",
+            "asset_version": _asset_version()}
+
+
+def _asset_version():
+    """The stylesheet's mtime, appended to its URL so an edit is never cached.
+
+    Flask serves static files with `no-cache`, which asks the browser to
+    revalidate - but a page restored from the back/forward cache, or a reload
+    that hits the memory cache, can still use an old copy. A changing URL
+    cannot be reused by mistake.
+    """
+    try:
+        return int(os.stat(os.path.join(app.static_folder, "style.css")).st_mtime)
+    except OSError:
+        return 0
+
+
+@app.route("/program/<code>")
+def page_program(code):
+    """Switch program and return to the page the switch was pressed on."""
+    chosen = programs.normalise(code)
+    if not chosen:
+        abort(404)
+    # Only same-site paths: `next` comes off a URL, so an absolute one would
+    # turn this route into an open redirect.
+    target = request.args.get("next") or "/"
+    if not target.startswith("/") or target.startswith("//"):
+        target = "/"
+    response = redirect(target)
+    response.set_cookie(programs.COOKIE, chosen, max_age=programs.COOKIE_MAX_AGE,
+                        samesite="Lax")
+    return response
+
+
+def _dir(code=None):
+    """The catalog directory for this program.
+
+    A directory rather than a filter over one shared table: team numbers are
+    reused across programs, so a single table keyed by number would merge an IQ
+    team into the V5 team that happens to share its number. The `program` field
+    on each record stays as a cross-check, not as the thing keeping them apart.
+    """
+    return programs.catalog_dir(code or _program()["code"])
+
+
+def _scoring(code=None):
+    """ALLIANCE_SCORING or COOPERATIVE_SCORING for the current program."""
+    return programs.scoring(code or _program()["code"])
+
+
+def _team_columns(code=None):
+    """(columns, default sort, valid keys) for the program's teams table."""
+    if _scoring(code) == catalog.COOPERATIVE_SCORING:
+        return TEAM_COLUMNS_COOP, DEFAULT_TEAM_SORT_COOP, {k for k, _, _ in TEAM_COLUMNS_COOP}
+    return TEAM_COLUMNS, DEFAULT_TEAM_SORT, TEAM_COLUMN_KEYS
+
+
+def _events(code=None):
+    return catalog.list_events(_dir(code))
+
+
+def _matches(code=None):
+    return catalog.list_matches(_dir(code))
+
+
+def _teams(code=None):
+    return catalog.list_teams(_dir(code))
+
+
+def _team_index(code=None):
+    return catalog.team_index(_dir(code), _scoring(code))
+
+
 # Ratings are derived, not stored, and cost ~80ms over the whole catalog. Cached
 # on the match file's own mtime so a page load does not re-solve 42 least-squares
 # systems, and an import invalidates it without anything having to say so.
 _ratings_cache = {}
 
 
-def _ratings():
-    """({event: {team: opr/dpr/ccwm}}, {team: elo})."""
-    path = os.path.join(catalog.CATALOG_DIR, catalog.MATCHES_FILE)
+def _ratings(code=None):
+    """({event: {team: opr/dpr/ccwm}}, {team: elo}) for one program.
+
+    Solved per program, not once for the catalog: Elo is a single sequential
+    pass over every scored match, so pooling two programs would rate a V5RC
+    team on VIQRC results if a team number appeared in both.
+    """
+    code = code or _program()["code"]
+    # Nothing to solve under cooperative scoring: OPR separates a team from its
+    # partners by who they beat, and Elo moves on a result. Both would return
+    # numbers, and all of them would be meaningless.
+    if _scoring(code) == catalog.COOPERATIVE_SCORING:
+        return {}, {}
+    path = os.path.join(_dir(code), catalog.MATCHES_FILE)
     try:
         stat = os.stat(path)
         stamp = (stat.st_mtime_ns, stat.st_size)
     except OSError:
         stamp = None
-    if _ratings_cache.get("stamp") != stamp:
-        _ratings_cache["stamp"] = stamp
-        _ratings_cache["value"] = (ratings_module.by_event(), ratings_module.elo())
-    return _ratings_cache["value"]
+    cached = _ratings_cache.get(code)
+    if not cached or cached[0] != stamp:
+        events, matches = _events(code), _matches(code)
+        cached = (stamp, (ratings_module.by_event(matches, events),
+                          ratings_module.elo(matches, events)))
+        _ratings_cache[code] = cached
+    return cached[1]
 
 
 def _attach_ratings(rows):
@@ -576,6 +713,28 @@ def _attach_ratings(rows):
         entry = elo.get(number) or {}
         row["elo"] = entry.get("elo")
         row["elo_pool"] = entry.get("pool")
+    return rows
+
+
+def _attach_channels(rows):
+    """Each team's YouTube channel, read once for the whole table.
+
+    The title is stored flat as `channel` rather than the record itself, so the
+    column sorts as text - teams with a channel first, A-Z, and the rest last,
+    which is the same "unknown goes to the bottom" rule every other column
+    follows. A team with only a suggestion is marked as such rather than shown
+    as having one, because a suggestion is a guess nobody has confirmed.
+    """
+    table = team_media.load_all(programs.media_file(_program()["code"]))
+    for row in rows:
+        record = table.get(str(row["number"]).upper()) or {}
+        channel = record.get("channel") or {}
+        row["channel"] = channel.get("title")
+        row["channel_url"] = channel.get("url")
+        row["channel_reason"] = channel.get("reason")
+        row["channel_club"] = channel.get("kind") == "organization"
+        row["channel_confirmed"] = channel.get("source") == "manual"
+        row["channel_suggested"] = 0 if channel else len(record.get("channel_suggestions") or [])
     return rows
 
 
@@ -660,31 +819,65 @@ def _match_when(match, event):
 
 def _team_rows(number, matches):
     """One row per match from this team's point of view."""
-    events = catalog.list_events()
+    events = _events()
     rows = []
+    # A cooperative match is reported as two one-team alliances, so the team
+    # opposite is the one played *with*: it belongs under partners, and there
+    # is no score against.
+    coop = _scoring() == catalog.COOPERATIVE_SCORING
     for match in matches:
         side = catalog.alliance_of(match, number)
         other = "blue" if side == "red" else "red"
         alliances = match.get("alliances", {})
         mine = alliances.get(side, {}) if side else {}
         theirs = alliances.get(other, {}) if side else {}
+        beside = [t for t in mine.get("teams", []) if t != catalog.team_key(number)]
         rows.append({
             "match": match,
-            "side": side,
-            "partners": [t for t in mine.get("teams", []) if t != catalog.team_key(number)],
-            "opponents": list(theirs.get("teams", [])),
+            "side": None if coop else side,
+            "partners": list(theirs.get("teams", [])) if coop else beside,
+            "opponents": [] if coop else list(theirs.get("teams", [])),
             "score": mine.get("score"),
-            "against": theirs.get("score"),
-            "outcome": catalog.outcome(match, number),
+            "against": None if coop else theirs.get("score"),
+            "outcome": catalog.outcome(match, number, _scoring()),
             "status": _match_status(match),
             "when": _match_when(match, events.get(str(match.get("event") or "").upper())),
         })
     return rows
 
 
+def _org_key(name):
+    """Organizations compared ignoring case and spacing.
+
+    40 organizations are registered under more than one capitalization
+    ("CROWN POINT HIGH SCHOOL" / "Crown Point High School"). Compared exactly,
+    the filter would split one club's teams across two options.
+    """
+    return " ".join(str(name or "").split()).lower()
+
+
+def _organization_options(rows):
+    """[(label, team count)] for the rows given, busiest first.
+
+    Each group is labelled with its most common spelling, ties going to the
+    alphabetically first, so the label is stable between page loads.
+    """
+    spellings = {}
+    for row in rows:
+        name = " ".join(str(row.get("organization") or "").split())
+        if name:
+            group = spellings.setdefault(_org_key(name), {})
+            group[name] = group.get(name, 0) + 1
+    options = []
+    for group in spellings.values():
+        label = sorted(group.items(), key=lambda item: (-item[1], item[0]))[0][0]
+        options.append((label, sum(group.values())))
+    return sorted(options, key=lambda item: (-item[1], item[0].lower()))
+
+
 @app.route("/")
 def page_teams():
-    rows = _attach_ratings(catalog.team_index())
+    rows = _attach_channels(_attach_ratings(_team_index()))
     total = len(rows)
     query = (request.args.get("q") or "").strip()
     if query:
@@ -732,15 +925,26 @@ def page_teams():
         region = ""
         defaulted = False
     if region:
-        rows = [r for r in rows if r["region_group"] == region]
+        rows = [r for r in rows if regions.covers(r["region_group"], region)]
+
+    # Offered only once a region is chosen: every region together is ~1,350
+    # organizations, too many for a dropdown. The search box still finds any.
+    org_options = _organization_options(rows) if region else []
+    # A chosen organization with no teams under the current region and grade is
+    # dropped, rather than left filtering the table down to nothing.
+    org_labels = {_org_key(label): label for label, _ in org_options}
+    org = org_labels.get(_org_key(request.args.get("org")), "")
+    if org:
+        rows = [r for r in rows if _org_key(r.get("organization")) == _org_key(org)]
     matched = len(rows)
 
-    sort = request.args.get("sort") or DEFAULT_TEAM_SORT
-    if sort not in TEAM_COLUMN_KEYS:
-        sort = DEFAULT_TEAM_SORT
+    columns, default_sort, column_keys = _team_columns()
+    sort = request.args.get("sort") or default_sort
+    if sort not in column_keys:
+        sort = default_sort
     # Numbers default to biggest-first and text to A-Z, which is what each
     # column is usually being asked for.
-    numeric = dict((key, is_num) for key, _, is_num in TEAM_COLUMNS)[sort]
+    numeric = dict((key, is_num) for key, _, is_num in columns)[sort]
     direction = request.args.get("dir")
     if direction not in ("asc", "desc"):
         direction = "desc" if numeric else "asc"
@@ -748,43 +952,88 @@ def page_teams():
 
     return render_template("teams.html", section="teams", rows=rows[:TEAM_ROWS],
                            query=query, total=total, matched=matched, limit=TEAM_ROWS,
-                           columns=TEAM_COLUMNS, sort=sort, dir=direction,
+                           columns=columns, sort=sort, dir=direction,
                            region=region, region_counts=region_counts,
+                           region_options=regions.options(region_counts),
                            defaulted=defaulted, all_regions=ALL_REGIONS,
                            grade=grade, grade_counts=grade_counts,
-                           event_count=len(catalog.list_events()),
-                           match_count=len(catalog.list_matches()))
+                           org=org, org_options=org_options,
+                           event_count=len(_events()),
+                           match_count=len(_matches()))
 
 
 @app.route("/team/<number>")
 def page_team(number):
-    team = catalog.get_team(number)
+    team = catalog.get_team(number, _dir())
     if team is None:
         abort(404, f"no team {number} in the catalog")
 
-    matches = catalog.matches_for_team(number)
+    matches = catalog.matches_for_team(number, _dir())
     rows = _team_rows(number, matches)
 
     per_event, elo = _ratings()
-    events_by_key = catalog.list_events()
+    events_by_key = _events()
     rated = []
     for key, table in per_event.items():
         if number in table:
             rated.append({"event": events_by_key.get(key, {"key": key, "name": key}),
                           **table[number]})
     rated.sort(key=lambda r: str(r["event"].get("start") or ""))
-    season = _attach_ratings([dict(team, **catalog.team_record(matches, number))])[0]
+    season = _attach_ratings([dict(team, **catalog.team_record(matches, number, _scoring()))])[0]
 
     return render_template(
         "team.html", section="teams", team=team,
         rated=rated, season=season, elo=elo.get(number),
-        partners=catalog.partners(matches, number), all_teams=catalog.list_teams(),
-        record=catalog.team_record(matches, number),
+        partners=catalog.partners(matches, number, _scoring()), all_teams=_teams(),
+        record=catalog.team_record(matches, number, _scoring()),
         matches=rows,
         videos=[r for r in rows if r["status"]["video"]],
         analysed_count=sum(1 for r in rows if r["status"]["analysed"]),
-        events=catalog.list_events(),
+        events=_events(),
+        media=_team_media(number),
     )
+
+
+def _team_media(number):
+    """The team's YouTube channel and robot videos, ready to render.
+
+    This season's videos come first, newest first within each season, so an
+    old robot is never the first thing a scout sees.
+    """
+    record = team_media.get(number, programs.media_file(_program()['code'])) or {}
+
+    def ordered(videos):
+        newest = sorted(videos, key=lambda v: v.get("published") or "", reverse=True)
+        return sorted(newest, key=lambda v: v.get("season") != "current")   # stable
+
+    checked = record.get("checked_at")
+    return {
+        "channel": record.get("channel"),
+        "videos": ordered(record.get("videos") or []),
+        "channel_suggestions": record.get("channel_suggestions") or [],
+        "video_suggestions": ordered(record.get("video_suggestions") or []),
+        "checked": _dt.datetime.fromtimestamp(checked).date().isoformat() if checked else None,
+    }
+
+
+@app.route("/team/<number>/media", methods=["POST"])
+def page_team_media(number):
+    """Confirm a suggested channel or video, or remove one for good."""
+    team = catalog.get_team(number, _dir())
+    if team is None:
+        abort(404, f"no team {number} in the catalog")
+    action, kind, item_id = (request.form.get(f) or "" for f in ("action", "kind", "id"))
+    if kind not in ("channel", "video") or not item_id:
+        abort(400, "kind must be channel or video, with an id")
+    if action == "confirm":
+        team_media.confirm(team["number"], kind, item_id,
+                           programs.media_file(_program()["code"]))
+    elif action == "remove":
+        team_media.remove(team["number"], kind, item_id,
+                          programs.media_file(_program()["code"]))
+    else:
+        abort(400, "action must be confirm or remove")
+    return redirect(f"/team/{quote(team['number'])}#videos")
 
 
 AWARD_HIGHLIGHTS = ("Tournament Champions", "Tournament Finalists", "Excellence Award")
@@ -792,12 +1041,12 @@ AWARD_HIGHLIGHTS = ("Tournament Champions", "Tournament Finalists", "Excellence 
 
 @app.route("/event/<path:key>")
 def page_event(key):
-    event = catalog.get_event(key)
+    event = catalog.get_event(key, _dir())
     if event is None:
         abort(404, f"no event {key} in the catalog")
     resolved = event["key"]
 
-    matches = [m for m in catalog.list_matches().values()
+    matches = [m for m in _matches().values()
                if str(m.get("event") or "").upper() == resolved.upper()]
     bracket = bracket_module.build(matches)
     detail = event_details.load(resolved) or {}
@@ -842,7 +1091,29 @@ def page_event(key):
                    if (m["alliances"]["red"]["score"] is not None
                        and m["alliances"]["blue"]["score"] is not None)),
         with_footage=sum(1 for m in matches if catalog.segment_of(m)),
+        webcast=_webcast(event),
     )
+
+
+def _webcast(event, table=None):
+    """The event's stream link from the scraped webcast table, or None.
+
+    The Stream column, filter and sort all read from this one function.
+    """
+    table = webcasts.load_all() if table is None else table
+    return webcasts.describe(webcasts.get(event.get("sku") or event.get("key"), table=table), table)
+
+
+@app.route("/learn")
+def page_learn():
+    """The Learn tab, still being written."""
+    return render_template("learn.html", tab="learn")
+
+
+@app.route("/practice")
+def page_practice():
+    """Placeholder for the Practice tab."""
+    return render_template("practice.html", tab="practice")
 
 
 @app.route("/help")
@@ -858,7 +1129,7 @@ def page_help():
 
     per_event, elo = _ratings()
     values = sorted(e["elo"] for e in elo.values())
-    events = catalog.list_events()
+    events = _events()
 
     field_means, field_tops = [], []
     for event in events.values():
@@ -884,7 +1155,7 @@ def page_help():
         elo_mean=round(statistics.mean(values)) if values else None,
         elo_sd=round(statistics.pstdev(values)) if values else None,
         elo_k=ratings_module.ELO_K, elo_start=ratings_module.ELO_START,
-        pools=len(ratings_module.components(list(catalog.list_matches().values()))),
+        pools=len(ratings_module.components(list(_matches().values()))),
         field_mean_spread=spread(field_means), field_top_spread=spread(field_tops),
         floor=imp.ELO_FLOOR, ceiling=imp.ELO_CEILING, weights=imp.WEIGHTS,
         levels=imp.LEVEL_SCORES, min_rated=imp.MIN_RATED_TEAMS,
@@ -897,14 +1168,27 @@ def page_help():
 
 @app.route("/matches")
 def page_matches():
-    events = catalog.list_events()
-    matches = sorted(catalog.list_matches().values(), key=lambda m: catalog.sort_key(m, events))
+    events = _events()
+    matches = sorted(_matches().values(), key=lambda m: catalog.sort_key(m, events))
     chosen = request.args.get("event")
     if chosen:
         folded = chosen.upper()
         matches = [m for m in matches if str(m.get("event") or "").upper() == folded]
     if request.args.get("footage"):
         matches = [m for m in matches if catalog.segment_of(m)]
+    query = (request.args.get("q") or "").strip()
+    if query:
+        # Team numbers are matched whole ("929U" finds 929U, not 1929U's
+        # matches); anything else matches as text in the event or match name.
+        needle = query.lower()
+
+        def hit(match):
+            if any(team.lower() == needle for team in catalog.teams_in(match)):
+                return True
+            event = events.get(str(match.get("event") or "").upper()) or {}
+            return needle in " ".join(str(v or "") for v in (
+                match.get("name"), match.get("event"), event.get("name"))).lower()
+        matches = [m for m in matches if hit(m)]
 
     total = len(matches)
     try:
@@ -915,7 +1199,7 @@ def page_matches():
     page = min(page, pages)
     window = matches[(page - 1) * MATCH_ROWS: page * MATCH_ROWS]
 
-    with_matches = {str(m.get("event") or "").upper() for m in catalog.list_matches().values()}
+    with_matches = {str(m.get("event") or "").upper() for m in _matches().values()}
     selectable = {k: v for k, v in events.items() if k.upper() in with_matches}
     addable = {k: v for k, v in events.items()
                if catalog.event_status(v) in ("past", "ongoing")}
@@ -926,7 +1210,7 @@ def page_matches():
                                  for m in window],
                            rounds=catalog.ROUNDS, videos=_list_videos(),
                            total=total, page=page, pages=pages,
-                           footage_only=bool(request.args.get("footage")))
+                           footage_only=bool(request.args.get("footage")), query=query)
 
 
 def _days_from_today(value, today=None):
@@ -944,22 +1228,103 @@ def _days_from_today(value, today=None):
         return (1, 0)
 
 
+# (key, header, numeric). Numeric columns start highest-first on their first
+# click; text columns start A-Z.
+EVENT_COLUMNS = (
+    ("name", "Event", False),
+    ("sku", "SKU", False),
+    ("importance", "Importance", True),
+    ("status", "Status", False),
+    ("grade", "Grade", False),
+    ("start", "Dates", False),
+    ("where", "Where", False),
+    ("matches", "Matches", True),
+    ("stream", "Stream", False),
+)
+EVENT_COLUMN_KEYS = {key for key, _, _ in EVENT_COLUMNS}
+EVENT_COLUMN_NUMERIC = {key: numeric for key, _, numeric in EVENT_COLUMNS}
+DEFAULT_EVENT_SORT = "importance"
+STATUS_ORDER = {"past": 0, "ongoing": 1, "upcoming": 2}
+
+# What the Stream column's button says, in the order the column sorts. An
+# upcoming event with no link is "none": the state describes the link, and
+# whether an event has happened is the Status filter's job.
+STREAM_STATES = {"stream": "Stream", "upcoming": "Upcoming", "none": "No stream"}
+
+
+def _stream_state(row):
+    if not row.get("webcast"):
+        return "none"
+    return "upcoming" if row["status"] == "upcoming" else "stream"
+
+
+def _event_sort_value(row, sort):
+    """The value a column sorts on, or None when the event has none."""
+    if sort == "importance":
+        return row["importance"]["score"]
+    if sort == "status":
+        return STATUS_ORDER.get(row["status"])
+    if sort == "where":
+        label = row.get("location_label")
+        return (regions.sort_key(row["region_group"]), label.lower()) if label else None
+    if sort == "stream":
+        return list(STREAM_STATES).index(_stream_state(row))
+    if sort == "near":
+        rank, days = _days_from_today(row.get("start"))
+        return None if rank else days
+    if sort == "matches":
+        return row.get("matches") or 0
+    value = row.get(sort)
+    if value in (None, ""):
+        return None
+    return value.lower() if isinstance(value, str) else value
+
+
+def _sorted_events(rows, sort, descending):
+    """Sort by one column, keeping unknown values last in both directions.
+
+    Ties break on start date then name - except importance, which breaks on
+    closeness to today, so of two equally important events the sooner one leads.
+    Successive stable sorts, least significant first; Python keeps equal items in
+    order even with reverse=True, so the tie-breakers are not flipped.
+    """
+    known = [r for r in rows if _event_sort_value(r, sort) is not None]
+    unknown = [r for r in rows if _event_sort_value(r, sort) is None]
+    for group in (known, unknown):
+        group.sort(key=lambda r: (r.get("name") or "").lower())
+        if sort == "importance":
+            group.sort(key=lambda r: _days_from_today(r.get("start")))
+        else:
+            group.sort(key=lambda r: str(r.get("start") or "9999"))
+    known.sort(key=lambda r: _event_sort_value(r, sort), reverse=descending)
+    return known + unknown
+
+
 @app.route("/events")
 def page_events():
-    events = catalog.list_events()
+    events = _events()
     counts = {}
-    for match in catalog.list_matches().values():
+    for match in _matches().values():
         counts[match.get("event")] = counts.get(match.get("event"), 0) + 1
 
     _, elo = _ratings()
+    webcast_table = webcasts.load_all()
     rows = []
     for event in events.values():
         rows.append({**event, "status": catalog.event_status(event),
+                     "webcast": _webcast(event, webcast_table),
                      "matches": counts.get(event["key"], 0),
                      "region_group": regions.group_of(event.get("location")),
                      "grade": catalog.event_grade(event),
                      "importance": importance_module.score_event(event, elo),
                      "location_label": _location_label(event.get("location"))})
+
+    query = (request.args.get("q") or "").strip()
+    if query:
+        needle = query.lower()
+        rows = [r for r in rows
+                if needle in " ".join(str(r.get(f) or "")
+                                      for f in ("name", "sku", "key", "location_label")).lower()]
 
     region_counts = {}
     for row in rows:
@@ -976,31 +1341,37 @@ def page_events():
         rows = [r for r in rows if r.get("grade") == grade]
 
     requested = request.args.get("region")
-    defaulted = requested is None
-    region = DEFAULT_REGION if defaulted else requested
+    # As on the Teams page, the region default narrows browsing, never a search.
+    defaulted = requested is None and not query
+    region = DEFAULT_REGION if defaulted else (requested or "")
     if region == ALL_REGIONS:
         region = ""
     if defaulted and region and not region_counts.get(region):
         region = ""
         defaulted = False
     if region:
-        rows = [r for r in rows if r["region_group"] == region]
+        rows = [r for r in rows if regions.covers(r["region_group"], region)]
 
-    # Importance first by default. Ties and near-ties break on proximity to
-    # today, so two equally important events are ordered by which is sooner.
-    order = request.args.get("order")
-    if order == "date":
-        rows.sort(key=lambda e: (str(e.get("start") or ""), e.get("name") or ""))
-    elif order == "near":
-        rows.sort(key=lambda e: (_days_from_today(e.get("start")), e.get("name") or ""))
-    else:
-        order = "importance"
-        rows.sort(key=lambda e: (-e["importance"]["score"],
-                                 _days_from_today(e.get("start")), e.get("name") or ""))
+    # Old links used ?order=; keep them working.
+    legacy = request.args.get("order")
+    near = request.args.get("near") == "1" or legacy == "near"
+    sort = request.args.get("sort") or ("start" if legacy == "date" else DEFAULT_EVENT_SORT)
+    if sort not in EVENT_COLUMN_KEYS:
+        sort = DEFAULT_EVENT_SORT
+    default_dir = "desc" if EVENT_COLUMN_NUMERIC[sort] else "asc"
+    dir_ = request.args.get("dir") if request.args.get("dir") in ("asc", "desc") else default_dir
+    # Closest to today has one sensible direction: nearest first.
+    rows = _sorted_events(rows, "near" if near else sort, dir_ == "desc" and not near)
 
     chosen = request.args.get("status")
     if chosen:
         rows = [r for r in rows if r["status"] == chosen]
+    stream_counts = {state: 0 for state in STREAM_STATES}
+    for row in rows:
+        stream_counts[_stream_state(row)] += 1
+    stream = request.args.get("stream") if request.args.get("stream") in STREAM_STATES else ""
+    if stream:
+        rows = [r for r in rows if _stream_state(r) == stream]
     tally = {}
     for event in events.values():
         state = catalog.event_status(event)
@@ -1019,8 +1390,11 @@ def page_events():
                            tally=tally, chosen=chosen, total=len(events),
                            shown=shown, page=page, pages=pages,
                            region=region, region_counts=region_counts,
+                           region_options=regions.options(region_counts),
                            defaulted=defaulted, all_regions=ALL_REGIONS,
-                           grade=grade, grade_counts=grade_counts, order=order,
+                           grade=grade, grade_counts=grade_counts,
+                           columns=EVENT_COLUMNS, sort=sort, dir=dir_, near=near, query=query,
+                           stream=stream, stream_counts=stream_counts, stream_states=STREAM_STATES,
                            today=_dt.date.today().isoformat())
 
 
@@ -1070,6 +1444,7 @@ def page_add_event():
         level=(form.get("level") or "").strip() or None,
         location={"city": (form.get("city") or "").strip() or None,
                   "region": (form.get("region") or "").strip() or None},
+        directory=_dir(),
     )
     return redirect(f"/matches?event={event['key']}")
 
@@ -1078,7 +1453,7 @@ def page_add_event():
 def page_add_match():
     form = request.form
     event = (form.get("event") or "").strip()
-    if not catalog.get_event(event):
+    if not catalog.get_event(event, _dir()):
         abort(400, "choose an event that exists")
     match = catalog.save_match(
         event=event,
@@ -1087,15 +1462,17 @@ def page_add_match():
         number=_optional_int(form.get("number")) or 1,
         red=_teams_field(form.get("red")), blue=_teams_field(form.get("blue")),
         red_score=_optional_int(form.get("red_score")),
-        blue_score=_optional_int(form.get("blue_score")),
-        video=_video_field(form),
+        blue_score=(_optional_int(form.get("red_score"))
+                    if _scoring() == catalog.COOPERATIVE_SCORING
+                    else _optional_int(form.get("blue_score"))),
+        video=_video_field(form), directory=_dir(),
     )
     return redirect(f"/match/{match['key']}")
 
 
 @app.route("/match/<path:key>")
 def page_match(key):
-    match = catalog.get_match(key)
+    match = catalog.get_match(key, _dir())
     if match is None:
         abort(404, f"no match {key} in the catalog")
 
@@ -1106,12 +1483,12 @@ def page_match(key):
         name, start, end = segment
         workspace = f"/workspace?video={quote(name)}&start={start}&end={end}"
 
-    event = catalog.get_event(match.get("event"))
+    event = catalog.get_event(match.get("event"), _dir())
     return render_template(
         "match.html", section="matches", match=match,
         event=event, when=_match_when(match, event),
         round_label=catalog.ROUND_LABELS.get(match.get("round"), "Unspecified"),
-        event_status=catalog.event_status(catalog.get_event(match.get("event"))),
+        event_status=catalog.event_status(catalog.get_event(match.get("event"), _dir())),
         status=status, result=status["result"] and _result_payload(status["result"]),
         videos=_list_videos(), workspace_url=workspace,
     )
@@ -1119,24 +1496,29 @@ def page_match(key):
 
 @app.route("/match/<path:key>/alliances", methods=["POST"])
 def page_match_alliances(key):
-    match = catalog.get_match(key)
+    match = catalog.get_match(key, _dir())
     if match is None:
         abort(404, f"no match {key} in the catalog")
     form = request.form
+    red_score = _optional_int(form.get("red_score"))
+    blue_score = _optional_int(form.get("blue_score"))
+    # One Teamwork score, stored on both sides the way the API reports it, so
+    # editing it by hand cannot leave the two halves disagreeing.
+    if _scoring() == catalog.COOPERATIVE_SCORING:
+        blue_score = red_score
     catalog.save_match(
         event=match["event"], round_slug=match["round"], instance=match["instance"],
         number=match["number"], key=match["key"],
         red=_teams_field(form.get("red")), blue=_teams_field(form.get("blue")),
-        red_score=_optional_int(form.get("red_score")),
-        blue_score=_optional_int(form.get("blue_score")),
-        video=match.get("video"),
+        red_score=red_score, blue_score=blue_score,
+        video=match.get("video"), directory=_dir(),
     )
     return redirect(f"/match/{key}")
 
 
 @app.route("/match/<path:key>/video", methods=["POST"])
 def page_match_video(key):
-    match = catalog.get_match(key)
+    match = catalog.get_match(key, _dir())
     if match is None:
         abort(404, f"no match {key} in the catalog")
     alliances = match.get("alliances", {})
@@ -1147,7 +1529,7 @@ def page_match_video(key):
         blue=alliances.get("blue", {}).get("teams", []),
         red_score=alliances.get("red", {}).get("score"),
         blue_score=alliances.get("blue", {}).get("score"),
-        video=_video_field(request.form),
+        video=_video_field(request.form), directory=_dir(),
         name=match.get("name"), field=match.get("field"),
         api_id=match.get("api_id"), scheduled=match.get("scheduled"),
         # Linking footage says nothing about where the match data came from, so

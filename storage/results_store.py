@@ -66,7 +66,7 @@ def save(key, manifest, results_dir=RESULTS_DIR):
     os.makedirs(results_dir, exist_ok=True)
     record = dict(manifest, key=key, saved_at=time.time())
     path = manifest_path(key, results_dir)
-    temporary = f"{path}.tmp"
+    temporary = f"{path}.{os.getpid()}.tmp"   # unique: two writers must not share it
     with open(temporary, "w") as handle:
         json.dump(record, handle, indent=2)
     os.replace(temporary, path)                # atomic, so no half-written manifest

@@ -1,0 +1,30 @@
+{#
+  The collapsible "Filters" menu shared by the Teams, Matches and Events tables.
+
+  Use inside the page's GET form, so the filters submit together with the search:
+
+    {% from "_filters.html" import filter_menu %}
+    {% call filter_menu(["Pacific Northwest", "High School"]) %}
+      <select name="grade">...</select>
+    {% endcall %}
+
+  `active` names the filters currently narrowing the table. They are shown on the
+  closed menu, so collapsing it never hides that the table is a subset.
+
+  A native <details>, so it opens and closes without JavaScript. The script in
+  base.html submits the form when a control inside changes, and sets `fo=1` so
+  the page reloads with the menu still open for the next change.
+#}
+{% macro filter_menu(active) -%}
+<details class="filters"{{ ' open' if request.args.get('fo') }}>
+  <summary>
+    <span class="filters-toggle">☰ Filters{% if active %} <span class="filters-count">{{ active|length }}</span>{% endif %}</span>
+    {%- if active %}<span class="filters-active">{{ active|join(' · ') }}</span>{% endif %}
+  </summary>
+  <div class="filters-panel">
+    <input type="hidden" name="fo" value="1" disabled>
+    {{ caller() }}
+    <noscript><button type="submit">Apply</button></noscript>
+  </div>
+</details>
+{%- endmacro %}

@@ -17,6 +17,7 @@ joins across every match and the season view scans all of them; a match record
 is a few hundred bytes, so a whole season is a couple of MB - cheap to read at
 once, where several thousand small files would not be.
 """
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -41,6 +42,12 @@ ROUNDS = (
     ("qf", "Quarterfinal", 3),
     ("sf", "Semifinal", 4),
     ("final", "Final", 5),
+    # VIQRC finals. Code 15 is not in the V5RC bracket sequence and arrives
+    # after qualification as a run of "Match #1-1", "#1-2"... - 690 of them
+    # across the imported IQ season, every one previously landing in
+    # "Unspecified". It is kept as its own slug rather than folded into
+    # "final" so the elimination bracket, which is a V5RC shape, ignores it.
+    ("iq_final", "Finals", 15),
     ("unknown", "Unspecified", None),
 )
 ROUND_LABELS = {slug: label for slug, label, _ in ROUNDS}
@@ -52,6 +59,36 @@ ALLIANCES = ("red", "blue")
 # Read-modify-write on a shared file, and Flask serves threaded, so two saves
 # arriving together would otherwise lose one.
 _lock = threading.RLock()
+
+# Threads are not the only writer. An import running beside the server - or two
+# imports started by two people - are separate processes, which a thread lock
+# does nothing about. Measured the hard way: two season walks at once took
+# matches.json from 2,848 records to 1,439, each overwriting a whole table the
+# other had just extended. So every read-modify-write also takes an exclusive
+# lock on a file in the catalog directory, which the operating system honours
+# across processes.
+try:
+    import fcntl
+except ImportError:                                # not POSIX; threads only
+    fcntl = None
+
+LOCK_FILE = ".lock"
+
+
+@contextlib.contextmanager
+def _guard(directory=CATALOG_DIR):
+    """Hold this catalog directory against other threads and other processes."""
+    with _lock:
+        if fcntl is None:
+            yield
+            return
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, LOCK_FILE), "w") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _slug(text, limit=60):
@@ -117,7 +154,10 @@ def _read(filename, directory=CATALOG_DIR):
 def _write(filename, table, directory=CATALOG_DIR):
     os.makedirs(directory, exist_ok=True)
     path = _path(filename, directory)
-    temporary = f"{path}.tmp"
+    # The temporary name carries the pid: two processes writing the same table
+    # both used to write "matches.json.tmp", so whichever renamed second found
+    # the file already gone and died on a FileNotFoundError.
+    temporary = f"{path}.{os.getpid()}.tmp"
     with open(temporary, "w") as handle:
         json.dump(table, handle, indent=2, sort_keys=True)
     os.replace(temporary, path)                    # atomic: no half-written table
@@ -154,7 +194,7 @@ def save_team(number, name=None, organization=None, location=None, grade=None,
     if not key:
         raise ValueError("a team number is required")
 
-    with _lock:
+    with _guard(directory):
         table = list_teams(directory)
         record = table.get(key) or {
             "number": key, "name": None, "organization": None,
@@ -188,7 +228,7 @@ def ensure_team(number, directory=CATALOG_DIR):
 
 
 def delete_team(number, directory=CATALOG_DIR):
-    with _lock:
+    with _guard(directory):
         table = list_teams(directory)
         removed = table.pop(team_key(number), None)
         if removed:
@@ -225,7 +265,7 @@ def save_event(name, sku=None, season=None, start=None, end=None, location=None,
                ongoing=None, grades=None, teams=None, source="manual", key=None,
                directory=CATALOG_DIR):
     key = key or event_key(sku, name)
-    with _lock:
+    with _guard(directory):
         table = list_events(directory)
         record = table.get(key) or {"key": key, "added_at": time.time()}
         record.update({
@@ -305,7 +345,7 @@ def delete_event(key, with_matches=False, directory=CATALOG_DIR):
     orphan the calibration and seed files - they key on the video and frame
     range, so they survive on disk with nothing pointing at them.
     """
-    with _lock:
+    with _guard(directory):
         key = _resolve(list_events(directory), key) or str(key).strip()
         folded = key.upper()
         theirs = [m for m in list_matches(directory).values()
@@ -342,7 +382,7 @@ def transfer_video(from_key, to_key, force=False, directory=CATALOG_DIR):
     triple every artefact already computed resolves against it unchanged - the
     fifteen minutes a run costs is not spent again.
     """
-    with _lock:
+    with _guard(directory):
         table = list_matches(directory)
         source = table.get(_resolve(table, from_key) or "")
         target = table.get(_resolve(table, to_key) or "")
@@ -413,7 +453,7 @@ def save_match(event, round_slug="unknown", instance=1, number=1, division=None,
     round_slug = round_slug if round_slug in ROUND_LABELS else "unknown"
     key = key or match_key(event, round_slug, instance, number, division)
 
-    with _lock:
+    with _guard(directory):
         table = list_matches(directory)
         record = table.get(key) or {"key": key, "added_at": time.time()}
         red_teams = [team_key(t) for t in red if str(t).strip()]
@@ -449,7 +489,7 @@ def save_match(event, round_slug="unknown", instance=1, number=1, division=None,
 
 
 def delete_match(key, directory=CATALOG_DIR):
-    with _lock:
+    with _guard(directory):
         table = list_matches(directory)
         removed = table.pop(_resolve(table, key) or "", None)
         if removed:
@@ -502,13 +542,36 @@ def matches_for_team(number, directory=CATALOG_DIR):
     return sorted(found, key=lambda m: sort_key(m, events))
 
 
-def outcome(match, number):
+# How a match result is read. V5RC matches have two alliances and a winner.
+# VIQRC Teamwork matches have two teams playing together for a single score,
+# which the API reports on both "alliances" - measured on RE-VIQRC-25-3671,
+# where 150 of 154 matches carried identical red and blue scores. Read as
+# alliance play, every one of those is a tie.
+ALLIANCE_SCORING = "alliance"
+COOPERATIVE_SCORING = "cooperative"
+
+
+def team_score(match, number):
+    """What this team scored in this match, or None if no score is recorded."""
+    side = alliance_of(match, number)
+    if side is None:
+        return None
+    return match.get("alliances", {}).get(side, {}).get("score")
+
+
+def outcome(match, number, scoring=ALLIANCE_SCORING):
     """"win" / "loss" / "tie", or None when the match has no scores recorded.
 
     Scores are typed in by hand, and most matches will not have them. None here
     means unknown, and every aggregate below leaves those matches out of the
     record rather than counting them as losses.
+
+    A cooperative match has no winner at all, so it returns None as well -
+    calling them ties would give every IQ team a record of 0-0-N and a win
+    rate of zero, which reads as "played and never won".
     """
+    if scoring == COOPERATIVE_SCORING:
+        return None
     side = alliance_of(match, number)
     if side is None:
         return None
@@ -519,17 +582,39 @@ def outcome(match, number):
     return "win" if mine > theirs else ("loss" if mine < theirs else "tie")
 
 
-def team_record(matches, number):
-    """Win/loss/tie plus scoring averages, over the matches that have scores."""
+def team_record(matches, number, scoring=ALLIANCE_SCORING):
+    """Win/loss/tie plus scoring averages, over the matches that have scores.
+
+    Under cooperative scoring there is no record to keep, so the win/loss keys
+    are present and null - the same "not known" the rest of the catalog uses -
+    and what the program actually measures takes their place: how much a team
+    scores, its best, and its total.
+    """
+    if scoring == COOPERATIVE_SCORING:
+        scores = [s for s in (team_score(m, number) for m in matches) if s is not None]
+        return {
+            "matches": len(matches),
+            "scored_matches": len(scores),
+            "wins": None, "losses": None, "ties": None, "win_rate": None,
+            "avg_score": round(sum(scores) / len(scores), 1) if scores else None,
+            "high_score": max(scores) if scores else None,
+            "total_score": sum(scores) if scores else None,
+            "avg_conceded": None,
+            "events": sorted({m.get("event") for m in matches if m.get("event")}),
+        }
+
     tally = {"win": 0, "loss": 0, "tie": 0}
     scored, conceded, counted = 0, 0, 0
+    best = None
     for match in matches:
-        result = outcome(match, number)
+        result = outcome(match, number, scoring)
         if result is None:
             continue
         tally[result] += 1
         side = alliance_of(match, number)
-        scored += match["alliances"][side]["score"]
+        mine = match["alliances"][side]["score"]
+        scored += mine
+        best = mine if best is None else max(best, mine)
         conceded += match["alliances"]["blue" if side == "red" else "red"]["score"]
         counted += 1
 
@@ -540,12 +625,14 @@ def team_record(matches, number):
         "wins": tally["win"], "losses": tally["loss"], "ties": tally["tie"],
         "win_rate": round(tally["win"] / played, 3) if played else None,
         "avg_score": round(scored / counted, 1) if counted else None,
+        "high_score": best,
+        "total_score": scored if counted else None,
         "avg_conceded": round(conceded / counted, 1) if counted else None,
         "events": sorted({m.get("event") for m in matches if m.get("event")}),
     }
 
 
-def partners(matches, number):
+def partners(matches, number, scoring=ALLIANCE_SCORING):
     """Who a team has played alongside, most frequent first.
 
     Qualification and elimination partners are counted separately because they
@@ -557,16 +644,23 @@ def partners(matches, number):
     The record is the pair's record in the matches they played together, which
     is the only record that says anything about the pairing rather than about
     either team on its own.
+
+    Under cooperative scoring the partner is on the *other* side: a Teamwork
+    match is reported as two one-team alliances, so a team's own side holds
+    only itself and the team it played with sits opposite. Reading it the
+    alliance way would say every IQ team has never had a partner.
     """
     key = team_key(number)
+    together = scoring == COOPERATIVE_SCORING
     found = {}
     for match in matches:
         side = alliance_of(match, key)
         if side is None:
             continue
         elimination = match.get("round") not in ("qual", "practice")
-        result = outcome(match, key)
-        for other in match.get("alliances", {}).get(side, {}).get("teams", []):
+        result = outcome(match, key, scoring)
+        beside = "blue" if (together and side == "red") else ("red" if together else side)
+        for other in match.get("alliances", {}).get(beside, {}).get("teams", []):
             if other == key:
                 continue
             entry = found.setdefault(other, {
@@ -589,7 +683,7 @@ def partners(matches, number):
     return rows
 
 
-def team_index(directory=CATALOG_DIR):
+def team_index(directory=CATALOG_DIR, scoring=ALLIANCE_SCORING):
     """One row per team for the main table, with its season record attached.
 
     Built from a single pass over the matches rather than one query per team:
@@ -606,6 +700,6 @@ def team_index(directory=CATALOG_DIR):
     rows = []
     for number, team in sorted(list_teams(directory).items()):
         theirs = sorted(by_team.get(number, []), key=lambda m: sort_key(m, events))
-        rows.append({**team, **team_record(theirs, number),
+        rows.append({**team, **team_record(theirs, number, scoring),
                      "with_video": sum(1 for m in theirs if segment_of(m))})
     return rows
