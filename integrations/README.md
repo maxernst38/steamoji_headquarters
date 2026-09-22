@@ -10,6 +10,7 @@ match was typed in or imported.
 |---|---|
 | `vex_events.py` | the Public VEX Events API: events, teams, matches |
 | `webcasts.py` | webcast links scraped from `events.vex.com/webcasts` — links only, nothing downloaded |
+| `youtube.py` | each team's YouTube channel and robot videos, via the YouTube Data API — links only |
 
 ## The API moved
 
@@ -89,6 +90,68 @@ reports of this API answering 403 instead. `Retry-After` is honoured when sent.
 A 403 is still treated as ambiguous: throttling if a request has already
 succeeded on that client, otherwise a bad token.
 
+## Updating everything
+
+```
+python -m integrations.refresh              # both programs, webcasts, YouTube
+python -m integrations.refresh --programs v5rc --no-youtube
+python -m integrations.refresh --full       # trust nothing, re-fetch it all
+```
+
+The obvious way to update - re-running the import - does nothing, because
+responses are cached with no expiry, so the walk replays last week's answers.
+`--refresh` cures that by ignoring the cache entirely, which is the opposite
+problem: most of a season is events that finished months ago and cannot change,
+and re-fetching all of them costs an hour to learn nothing.
+
+`refresh.py` re-fetches only what could have moved. Listings always, because a
+cached listing cannot contain an event announced since; then an event when it
+is running, ended within 7 days, starts within 30, is new, or finished within
+the last 30 days without publishing any matches. Measured on the current
+catalogs that is 126 of 686 V5RC events and 107 of 704 VIQRC - about 470
+requests, against roughly 2,800 for `--full`.
+
+The 30-day limit on empty events matters: league nights and cancelled events
+often publish no matches at all, and without it every run would keep asking
+them forever for an answer that is never going to change.
+
+## Two programs, two catalogs
+
+Each program has its own season id and its own catalog directory. The importer
+takes the directory, so a VIQRC walk never touches the V5RC tables:
+
+```
+python -m integrations.vex_events --season 203 --program viqrc   # Level Up 2026-27
+python -m integrations.vex_events --season 204                   # Override 2026-27
+```
+
+`--directory` overrides `--program` for a one-off import somewhere else, and
+`import_season(..., directory=...)` takes the same argument from Python.
+
+Separate directories rather than one table with a `program` field, because team
+numbers are reused across programs: `838J` is an IQ team and could equally be a
+V5 one. Keyed by number alone, the two would merge into a single record with
+both teams' match histories.
+
+Program and season ids are read from the API rather than hardcoded, because
+they were not stable across the VRC to V5RC rename:
+
+```
+program 1  V5RC   season 204  Override 2026-2027
+program 41 VIQRC  season 203  Level Up 2026-2027
+```
+
+**A VIQRC Teamwork match is not an alliance match.** The API reports it as two
+one-team "alliances" carrying the same score, because the two teams play
+together. Measured on RE-VIQRC-25-3671: 154 matches, every one a pair of
+one-team sides, and 150 of them with identical red and blue scores. Nothing in
+the importer changes that shape - it is the API's - but everything that reads
+it has to know, or every IQ match scores as a tie. `storage/catalog.py` takes a
+`scoring` argument for exactly this.
+
+IQ finals arrive as `round=15`, which is not in the V5RC bracket sequence; it
+maps to the `iq_final` slug, labelled "Finals".
+
 ## A re-import converges
 
 Matches the API no longer lists are pruned, so re-importing an event does not
@@ -139,3 +202,36 @@ second run reports everything unchanged.
 - **Links are never deleted by a refresh.** A changed link keeps the old one in
   `previous`. Partners often post only days before an event, so coverage of
   upcoming events grows as the season goes on.
+
+## YouTube channels and robot videos
+
+```
+python -m integrations.youtube --plan 20   # who is next; spends nothing
+python -m integrations.youtube             # today's batch
+python -m integrations.youtube --team 1028A
+python -m integrations.youtube --status
+```
+
+Needs a free YouTube Data API key in `data/youtube_key` (or `YOUTUBE_API_KEY`),
+never printed. YouTube's search pages are not scraped; that breaks its terms.
+
+This searches **V5RC only**: it reads the V5RC catalog and orders teams by Elo,
+which cooperative play has none of. Its results go to `data/team_media.json`,
+while the site reads `data/team_media_viqrc.json` when the program is VEX IQ,
+so the two cannot be confused - an IQ run would need its own priority order
+first.
+
+- **The quota sets the pace.** 10,000 units a day; a search is 100, a channel
+  or a page of uploads is 1. One team costs 101–203 units, so a day covers
+  roughly 45–90 teams. A batch stops cleanly before a team it cannot finish, and
+  the next day continues. Quota resets at midnight Pacific.
+- **Order:** teams registered for upcoming Pacific Northwest events (soonest
+  first), then the rest of the region, then everyone by Elo. Each team is
+  re-checked after 30 days.
+- **Nothing attaches on a guess.** "High" confidence needs the exact team number
+  as a whole word (so 12393S is not 2393S) plus VEX context; robot videos need
+  a reveal/explanation/interview-type title and either the team's own channel
+  or this season's date. Everything else is a suggestion awaiting a person.
+- **Hand decisions stick.** A removed link is never re-attached, and a
+  confirmed one is never replaced by a search.
+- Responses are cached for 25 days, so re-grading after a rule change is free.
