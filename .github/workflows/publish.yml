@@ -24,7 +24,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120   # the first run imports from scratch; later ones take minutes
     permissions:
       contents: write         # to push the live branch
 
