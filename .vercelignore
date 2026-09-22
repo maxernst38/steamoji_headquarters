@@ -1,5 +1,6 @@
 # Keep the deployment to what a read-only site actually imports.
 # The analysis stack, the footage and the working data stay out of it.
+# tools/ is NOT excluded: the build command lives there.
 
 data/
 videos/
@@ -9,7 +10,6 @@ training/
 detection/
 calibration/
 deploy/
-tools/
 pipeline.py
 track.py
 calibrate.py

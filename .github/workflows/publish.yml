@@ -46,12 +46,12 @@ jobs:
       - name: Seed from the last publish
         run: |
           mkdir -p data
-          if git fetch --depth 1 origin live 2>/dev/null; then
-            git restore --source=FETCH_HEAD --worktree site-data || true
-            [ -d site-data ] && cp -r site-data/. data/ && rm -rf site-data
-            echo "seeded from the live branch"
+          if bash tools/fetch_data.sh 2>/dev/null; then
+            cp -r site-data/. data/
+            rm -rf site-data
+            echo "seeded from the published snapshot"
           else
-            echo "no live branch yet - this run will import from scratch"
+            echo "no snapshot published yet - this run imports from scratch (~35 min)"
           fi
 
       # Only the API response cache. Best-effort: if it is evicted the refresh
@@ -75,13 +75,29 @@ jobs:
       - name: Build the snapshot
         run: python -m tools.snapshot
 
-      - name: Publish the live branch
+      # Published as a release asset rather than committed: 13.8MB a night in
+      # the history would bloat the repository, and this way `main` stays code
+      # only while every Vercel build pulls the current data in.
+      - name: Publish the snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name "vex-tracker bot"
-          git config user.email "noreply@github.com"
-          git checkout --orphan live-build
-          git add -A
-          git add -f site-data            # ignored on main, carried on live
-          git commit -q -m "Publish $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push -f origin live-build:live
-          echo "pushed $(git rev-parse --short HEAD) to live"
+          tar czf site-data.tar.gz site-data
+          ls -lh site-data.tar.gz
+          gh release view data-latest >/dev/null 2>&1 || \
+            gh release create data-latest \
+              --title "Data snapshot" \
+              --notes "Rebuilt nightly by .github/workflows/publish.yml. Vercel downloads this at build time; see tools/fetch_data.sh."
+          gh release upload data-latest site-data.tar.gz --clobber
+
+      # Code pushes deploy themselves through Vercel's Git integration. This is
+      # for the other half: new data with no new code.
+      - name: Ask Vercel to redeploy with the new data
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            curl -fsS -X POST "$HOOK" >/dev/null && echo "deploy triggered"
+          else
+            echo "No VERCEL_DEPLOY_HOOK set - the site will pick this up on the next push."
+          fi
