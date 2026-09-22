@@ -54,9 +54,12 @@
         {% endfor %}
       </select>
     {% endcall %}
+    {% if not read_only %}
     <button type="button" class="add-toggle" data-toggle="add-panel" aria-controls="add-panel" aria-expanded="false">+ Add event</button>
+    {% endif %}
     </div>
   </form>
+  {% if not read_only %}
   <div id="add-panel" class="add-panel" hidden>
   <form method="post" action="/events/new" class="form">
     <label>Name<input name="name" required placeholder="Mall of America Signature Event"></label>
@@ -75,6 +78,7 @@
     records still need linking.
   </p>
   </div>
+  {% endif %}
   {% set filters = ('q=' ~ query|urlencode ~ '&' if query else '') ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') ~ ('stream=' ~ stream ~ '&' if stream else '') %}
   {% if rows %}
   <table>

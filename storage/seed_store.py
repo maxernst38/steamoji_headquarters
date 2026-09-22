@@ -10,9 +10,11 @@ collection point for that dataset as much as it is a cache.
 """
 import json
 import os
+
+from storage import paths
 import time
 
-SEED_DIR = os.path.join("data", "seeds")
+SEED_DIR = paths.path("seeds")
 
 
 def _slug(text):

@@ -266,6 +266,7 @@
 
 <section id="tab-videos" hidden>
   {% macro media_form(action, kind, item, label, cls='secondary') -%}
+  {%- if read_only %}{% else %}
   <form method="post" action="/team/{{ team.number }}/media" class="inline-form"
         {% if action == 'remove' %}onsubmit="return confirm('Remove this {{ kind }}? It will not be added back automatically.')"{% endif %}>
     <input type="hidden" name="action" value="{{ action }}">
@@ -273,6 +274,7 @@
     <input type="hidden" name="id" value="{{ item.id }}">
     <button type="submit" class="small {{ cls }}">{{ label }}</button>
   </form>
+  {%- endif %}
   {%- endmacro %}
   {% macro video_card(video, suggestion=False) -%}
   <div class="video-card">
@@ -356,16 +358,22 @@
             {{ events.get(row.match.event, {}).get('name', '')[:44] }}</a>
         </span>
         <span class="meta mono">{{ row.when.date or '' }}</span>
+        {%- if row.footage %}
+        <a class="meta" href="{{ row.footage.watch }}" target="_blank" rel="noopener noreferrer">▶ {{ row.footage.clock or 'watch' }}</a>
+        {%- endif %}
+        {%- if row.match.video and row.match.video.file %}
         <span class="meta mono">{{ row.match.video.file }}</span>
         <span class="meta">frames {{ row.match.video.start_frame }}–{{ row.match.video.end_frame }}</span>
         {% if row.status.analysed %}<span class="tag ok">analysed</span>{% else %}<span class="tag missing">not analysed</span>{% endif %}
+        {%- endif %}
       </div>
       {% endfor %}
     </div>
     {% else %}
     <p class="note">
-      No footage linked to this team's matches. Link a video file and frame range on a match page;
-      automatic scraping is not built yet.
+      No footage linked to this team's matches yet. A match page takes a stream link and the time
+      the match starts in it{% if not read_only %}; a video file and frame range are only needed to
+      run the tracker here{% endif %}.
     </p>
     {% endif %}
   </div>

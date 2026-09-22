@@ -1,0 +1,14 @@
+# The hosted, read-only copy: the site and the daily refresh, nothing else.
+#
+# Deliberately not the analysis stack. With VEX_READ_ONLY=1 the workspace and
+# every write route are not registered, so OpenCV (~90MB) and PyTorch (~1.2GB)
+# are never imported - see the conditional import block in webapp/server.py.
+# Those stay in environment.yml for the machine that actually runs the tracker.
+flask>=3.0
+requests>=2.31
+numpy>=1.26          # the least-squares solve behind OPR/DPR/CCWM
+gunicorn>=21.2       # the production server; Flask's own is not one
+
+# Needed once the Learn guides land (feature/learn-guides):
+# markdown>=3.5
+# pyyaml>=6.0

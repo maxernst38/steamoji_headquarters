@@ -16,11 +16,13 @@ link is shared by several events (from the rest of the table).
 """
 import json
 import os
+
+from storage import paths
 import re
 import threading
 import time
 
-WEBCAST_FILE = os.path.join("data", "webcasts.json")
+WEBCAST_FILE = paths.path("webcasts.json")
 
 _lock = threading.RLock()
 

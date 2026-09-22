@@ -23,10 +23,12 @@ Two rules keep hand decisions from being undone by the next automatic run:
 """
 import json
 import os
+
+from storage import paths
 import threading
 import time
 
-MEDIA_FILE = os.path.join("data", "team_media.json")
+MEDIA_FILE = paths.path("team_media.json")
 
 _lock = threading.RLock()
 

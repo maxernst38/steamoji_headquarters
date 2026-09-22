@@ -10,9 +10,11 @@ as a miss the moment any file it names goes missing.
 import hashlib
 import json
 import os
+
+from storage import paths
 import time
 
-RESULTS_DIR = os.path.join("data", "results")
+RESULTS_DIR = paths.path("results")
 
 # Parameters that change what comes out. `chunk` is deliberately absent: it trades
 # memory against speed without altering results, so keying on it would cause
