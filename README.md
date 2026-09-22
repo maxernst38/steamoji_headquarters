@@ -55,9 +55,11 @@ integrations/         outside data sources (see integrations/README.md)
 analysis/             ratings derived from match results (see analysis/README.md)
 webapp/               Flask server, team-centric pages, and the setup workspace
   programs.py           V5RC or VIQRC: which catalog a page reads, how a match scores, and the palette
+  learn.py              parses the Learn guides: Markdown prose plus six visual blocks
 training/             detector training (currently not working — see below)
 archive/              approaches that failed, kept for their findings
 
+content/learn/        the Learn tab's guides, as Markdown (see its README)
 videos/               input footage (not versioned)
 data/                 everything persisted, per match (see data/README.md)
   calibrations/         the field you drew

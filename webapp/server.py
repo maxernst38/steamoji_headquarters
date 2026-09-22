@@ -26,6 +26,7 @@ from storage import event_details
 from storage import regions
 from storage import webcasts
 from storage import team_media
+from webapp import learn as learn_content
 from webapp import programs
 from analysis import bracket as bracket_module
 from analysis import importance as importance_module
@@ -1106,8 +1107,42 @@ def _webcast(event, table=None):
 
 @app.route("/learn")
 def page_learn():
-    """The Learn tab, still being written."""
-    return render_template("learn.html", tab="learn")
+    """The guide sections, filtered to the program being shown."""
+    sections = learn_content.index(_program()["code"])
+    return render_template("learn.html", tab="learn", sections=sections,
+                           total=sum(section["count"] for section in sections))
+
+
+def _section(slug):
+    return next((c for c in learn_content.categories() if c["slug"] == slug), None)
+
+
+@app.route("/learn/<category>")
+def page_learn_category(category):
+    section = _section(category)
+    if section is None:
+        abort(404, f"no Learn section called {category}")
+    return render_template("learn_category.html", tab="learn", section=section,
+                           guides=learn_content.in_category(category, _program()["code"]))
+
+
+@app.route("/learn/<category>/<slug>")
+def page_learn_guide(category, slug):
+    """One guide, with its neighbours for the footer links."""
+    section = _section(category)
+    guide = learn_content.load(category, slug) if section else None
+    if guide is None:
+        abort(404, f"no guide {category}/{slug}")
+
+    # Ordered as the section lists them, so "next" means the next one a reader
+    # would meet rather than the next filename.
+    siblings = learn_content.in_category(category, _program()["code"])
+    keys = [g["slug"] for g in siblings]
+    at = keys.index(slug) if slug in keys else None
+    return render_template(
+        "learn_guide.html", tab="learn", section=section, guide=guide,
+        previous=siblings[at - 1] if at else None,
+        next=siblings[at + 1] if at is not None and at + 1 < len(siblings) else None)
 
 
 @app.route("/practice")

@@ -1,0 +1,27 @@
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg">
+  <!-- Equal diagonals are the whole test for a square frame. -->
+  <g transform="translate(90 30)">
+    <rect x="0" y="0" width="260" height="170" rx="4" fill="var(--panel)" stroke="var(--line)" stroke-width="3"/>
+    <line x1="0" y1="0" x2="260" y2="170" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <line x1="260" y1="0" x2="0" y2="170" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <circle cx="0" cy="0" r="5" fill="var(--accent)"/>
+    <circle cx="260" cy="0" r="5" fill="var(--accent)"/>
+    <circle cx="0" cy="170" r="5" fill="var(--accent)"/>
+    <circle cx="260" cy="170" r="5" fill="var(--accent)"/>
+    <text x="130" y="60" text-anchor="middle">A</text>
+    <text x="130" y="128" text-anchor="middle">B</text>
+    <text class="title" x="130" y="215" text-anchor="middle">Square</text>
+    <text class="label" x="130" y="235" text-anchor="middle">A = B</text>
+  </g>
+
+  <g transform="translate(430 30)">
+    <!-- the same frame pushed out of true: one diagonal grows, the other shrinks -->
+    <path d="M26 0 L286 0 L260 170 L0 170 Z" fill="var(--panel)" stroke="var(--line)" stroke-width="3"/>
+    <line x1="26" y1="0" x2="260" y2="170" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <line x1="286" y1="0" x2="0" y2="170" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <text x="165" y="60" text-anchor="middle">A</text>
+    <text x="120" y="128" text-anchor="middle">B</text>
+    <text class="title" x="143" y="215" text-anchor="middle">Not square</text>
+    <text class="label" x="143" y="235" text-anchor="middle">A ≠ B — the robot will pull to one side</text>
+  </g>
+</svg>
