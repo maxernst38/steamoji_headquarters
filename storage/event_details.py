@@ -41,7 +41,7 @@ def save(key, awards=None, rankings=None, skills=None, directory=DETAIL_DIR):
     }
     os.makedirs(directory, exist_ok=True)
     path = detail_path(key, directory)
-    temporary = f"{path}.tmp"
+    temporary = f"{path}.{os.getpid()}.tmp"   # unique: two writers must not share it
     with open(temporary, "w") as handle:
         json.dump(record, handle, indent=1, sort_keys=True)
     os.replace(temporary, path)

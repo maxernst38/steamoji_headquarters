@@ -99,7 +99,7 @@ def merge(rows, path=WEBCAST_FILE, seen_at=None):
             table[sku] = record
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        temporary = f"{path}.tmp"
+        temporary = f"{path}.{os.getpid()}.tmp"   # unique: two writers must not share it
         with open(temporary, "w") as handle:
             json.dump(table, handle, indent=1, sort_keys=True)
         os.replace(temporary, path)

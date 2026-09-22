@@ -17,6 +17,7 @@ joins across every match and the season view scans all of them; a match record
 is a few hundred bytes, so a whole season is a couple of MB - cheap to read at
 once, where several thousand small files would not be.
 """
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -58,6 +59,36 @@ ALLIANCES = ("red", "blue")
 # Read-modify-write on a shared file, and Flask serves threaded, so two saves
 # arriving together would otherwise lose one.
 _lock = threading.RLock()
+
+# Threads are not the only writer. An import running beside the server - or two
+# imports started by two people - are separate processes, which a thread lock
+# does nothing about. Measured the hard way: two season walks at once took
+# matches.json from 2,848 records to 1,439, each overwriting a whole table the
+# other had just extended. So every read-modify-write also takes an exclusive
+# lock on a file in the catalog directory, which the operating system honours
+# across processes.
+try:
+    import fcntl
+except ImportError:                                # not POSIX; threads only
+    fcntl = None
+
+LOCK_FILE = ".lock"
+
+
+@contextlib.contextmanager
+def _guard(directory=CATALOG_DIR):
+    """Hold this catalog directory against other threads and other processes."""
+    with _lock:
+        if fcntl is None:
+            yield
+            return
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, LOCK_FILE), "w") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _slug(text, limit=60):
@@ -123,7 +154,10 @@ def _read(filename, directory=CATALOG_DIR):
 def _write(filename, table, directory=CATALOG_DIR):
     os.makedirs(directory, exist_ok=True)
     path = _path(filename, directory)
-    temporary = f"{path}.tmp"
+    # The temporary name carries the pid: two processes writing the same table
+    # both used to write "matches.json.tmp", so whichever renamed second found
+    # the file already gone and died on a FileNotFoundError.
+    temporary = f"{path}.{os.getpid()}.tmp"
     with open(temporary, "w") as handle:
         json.dump(table, handle, indent=2, sort_keys=True)
     os.replace(temporary, path)                    # atomic: no half-written table
@@ -160,7 +194,7 @@ def save_team(number, name=None, organization=None, location=None, grade=None,
     if not key:
         raise ValueError("a team number is required")
 
-    with _lock:
+    with _guard(directory):
         table = list_teams(directory)
         record = table.get(key) or {
             "number": key, "name": None, "organization": None,
@@ -194,7 +228,7 @@ def ensure_team(number, directory=CATALOG_DIR):
 
 
 def delete_team(number, directory=CATALOG_DIR):
-    with _lock:
+    with _guard(directory):
         table = list_teams(directory)
         removed = table.pop(team_key(number), None)
         if removed:
@@ -231,7 +265,7 @@ def save_event(name, sku=None, season=None, start=None, end=None, location=None,
                ongoing=None, grades=None, teams=None, source="manual", key=None,
                directory=CATALOG_DIR):
     key = key or event_key(sku, name)
-    with _lock:
+    with _guard(directory):
         table = list_events(directory)
         record = table.get(key) or {"key": key, "added_at": time.time()}
         record.update({
@@ -311,7 +345,7 @@ def delete_event(key, with_matches=False, directory=CATALOG_DIR):
     orphan the calibration and seed files - they key on the video and frame
     range, so they survive on disk with nothing pointing at them.
     """
-    with _lock:
+    with _guard(directory):
         key = _resolve(list_events(directory), key) or str(key).strip()
         folded = key.upper()
         theirs = [m for m in list_matches(directory).values()
@@ -348,7 +382,7 @@ def transfer_video(from_key, to_key, force=False, directory=CATALOG_DIR):
     triple every artefact already computed resolves against it unchanged - the
     fifteen minutes a run costs is not spent again.
     """
-    with _lock:
+    with _guard(directory):
         table = list_matches(directory)
         source = table.get(_resolve(table, from_key) or "")
         target = table.get(_resolve(table, to_key) or "")
@@ -419,7 +453,7 @@ def save_match(event, round_slug="unknown", instance=1, number=1, division=None,
     round_slug = round_slug if round_slug in ROUND_LABELS else "unknown"
     key = key or match_key(event, round_slug, instance, number, division)
 
-    with _lock:
+    with _guard(directory):
         table = list_matches(directory)
         record = table.get(key) or {"key": key, "added_at": time.time()}
         red_teams = [team_key(t) for t in red if str(t).strip()]
@@ -455,7 +489,7 @@ def save_match(event, round_slug="unknown", instance=1, number=1, division=None,
 
 
 def delete_match(key, directory=CATALOG_DIR):
-    with _lock:
+    with _guard(directory):
         table = list_matches(directory)
         removed = table.pop(_resolve(table, key) or "", None)
         if removed:
