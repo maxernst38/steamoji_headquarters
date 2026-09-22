@@ -1,0 +1,87 @@
+name: Refresh data and publish
+
+# The nightly job that keeps the hosted site current. It runs the same
+# refresh you would run locally, builds the published snapshot, and pushes a
+# branch that Vercel deploys.
+#
+# The refresh cannot run on Vercel itself: its cron invokes an HTTP endpoint
+# with a timeout measured in seconds, this takes minutes, and a serverless
+# function has nowhere to write. So it runs here, where it has both time and a
+# disk, and the deployment only ever carries the result.
+
+on:
+  schedule:
+    # 08:30 UTC - half past midnight Pacific in winter, half past one in
+    # summer, since GitHub's cron does not follow daylight saving. Deliberately
+    # after midnight Pacific, which is when the YouTube quota resets.
+    - cron: '30 8 * * *'
+  workflow_dispatch:          # and whenever you want it now
+
+concurrency:
+  group: publish
+  cancel-in-progress: false   # never two refreshes writing one catalog
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write         # to push the live branch
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install what the refresh needs
+        run: pip install --quiet requests numpy
+
+      # The catalogs come from the last published snapshot rather than from a
+      # cold import: a full walk is 35 minutes and thousands of requests, and
+      # the refresh only needs yesterday's data to know what has changed.
+      - name: Seed from the last publish
+        run: |
+          mkdir -p data
+          if git fetch --depth 1 origin live 2>/dev/null; then
+            git restore --source=FETCH_HEAD --worktree site-data || true
+            [ -d site-data ] && cp -r site-data/. data/ && rm -rf site-data
+            echo "seeded from the live branch"
+          else
+            echo "no live branch yet - this run will import from scratch"
+          fi
+
+      # Only the API response cache. Best-effort: if it is evicted the refresh
+      # still works, it just costs more requests.
+      - name: Restore the API cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: vex-cache-${{ github.run_id }}
+          restore-keys: vex-cache-
+
+      - name: Refresh every source
+        env:
+          # Read straight from the environment, so no credential is ever
+          # written to this runner's disk - which is also why the publish step
+          # below cannot leak one.
+          VEX_EVENTS_TOKEN: ${{ secrets.VEX_EVENTS_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python -m integrations.refresh
+
+      - name: Build the snapshot
+        run: python -m tools.snapshot
+
+      - name: Publish the live branch
+        run: |
+          git config user.name "vex-tracker bot"
+          git config user.email "noreply@github.com"
+          git checkout --orphan live-build
+          git add -A
+          git add -f site-data            # ignored on main, carried on live
+          git commit -q -m "Publish $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push -f origin live-build:live
+          echo "pushed $(git rev-parse --short HEAD) to live"

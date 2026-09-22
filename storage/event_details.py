@@ -12,9 +12,11 @@ would create a second copy that could disagree with the first.
 """
 import json
 import os
+
+from storage import paths
 import time
 
-DETAIL_DIR = os.path.join("data", "event_details")
+DETAIL_DIR = paths.path("event_details")
 
 
 def _slug(key):

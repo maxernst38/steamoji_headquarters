@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 .DS_Store
 *.pt
+
+# Built by tools/snapshot.py and published on the live branch, not here.
+/site-data/

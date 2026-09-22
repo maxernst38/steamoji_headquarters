@@ -12,6 +12,8 @@ reattaches to a running job instead of losing it.
 import base64
 import datetime as _dt
 import os
+
+from storage import paths
 import threading
 import traceback
 import uuid
@@ -32,8 +34,14 @@ from analysis import importance as importance_module
 from analysis import ratings as ratings_module
 from storage import results_store
 from storage import seed_store
-# Set on the hosted copy, unset locally. See `editable` below.
-READ_ONLY = os.environ.get("VEX_READ_ONLY", "").strip().lower() in ("1", "true", "yes")
+# Set on the hosted copy, unset locally. See `local_only` below.
+#
+# Forced on Vercel, which sets VERCEL itself: a serverless deployment has no
+# writable disk, so the write routes could not work there even if someone
+# deployed without setting the flag. Better to be read-only by construction
+# than to depend on a dashboard setting being remembered.
+READ_ONLY = (os.environ.get("VEX_READ_ONLY", "").strip().lower() in ("1", "true", "yes")
+             or bool(os.environ.get("VERCEL")))
 
 # Everything below belongs to the video workspace, and every one of these
 # pulls in OpenCV - about 90MB installed, and useless on a server that holds
@@ -41,7 +49,7 @@ READ_ONLY = os.environ.get("VEX_READ_ONLY", "").strip().lower() in ("1", "true",
 # neither OpenCV nor NumPy's presence here; the routes that use them are not
 # registered either. RESULTS_DIR is spelled out rather than imported so the
 # results store still resolves.
-RESULTS_DIR = os.path.join("data", "results")
+RESULTS_DIR = paths.path("results")
 if not READ_ONLY:
     import cv2
     import numpy as np

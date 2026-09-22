@@ -1,0 +1,13 @@
+# What Vercel installs for the serverless function. Kept separate from
+# environment.yml, which is the machine that runs the tracker and needs the
+# whole analysis stack.
+#
+# The read-only mode never imports OpenCV, PyTorch or anything under
+# detection/ and calibration/, so none of that belongs here - see the
+# conditional import block in webapp/server.py.
+flask>=3.0
+numpy>=1.26          # the least-squares solve behind OPR/DPR/CCWM
+
+# Needed once the Learn guides land (feature/learn-guides):
+# markdown>=3.5
+# pyyaml>=6.0

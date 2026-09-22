@@ -1,5 +1,13 @@
 # Hosting the site
 
+Two ways, both documented here:
+
+- **[vercel.md](vercel.md)** — serverless, $0/month, data ships with each nightly
+  deployment. No server to maintain; every change is a deploy.
+- **This file** — a small VPS with systemd and Caddy, ~$5/month. A real machine
+  with a disk, which is more forgiving if you later want to run jobs on it.
+
+
 The hosted copy is **read-only**: with `VEX_READ_ONLY=1` the write routes and
 the video workspace are not registered at all, so there is no route that can
 change the catalog and nothing to defend. Your own machine keeps every form,

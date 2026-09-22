@@ -68,7 +68,9 @@ data/                 everything persisted, per match (see data/README.md)
   vex_token             your VEX Events API token (never committed)
   results/              finished runs
 docs/                 evidence images referenced from code comments
-deploy/               systemd units, Caddyfile and the hosting guide (see deploy/README.md)
+deploy/               hosting: a VPS with systemd and Caddy, or Vercel (see deploy/README.md)
+api/                  Vercel's entry point: the same Flask app as a function
+tools/                snapshot.py builds the published data subset
 ```
 
 ## How a run works
