@@ -674,9 +674,17 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
   .card { padding: 10px 12px; }
   .card .v { font-size: 19px; }
 
-  /* The table strip reaches the panel's edges, so the full width is usable. */
-  .table-scroll { margin: 0 -14px; padding: 0 14px; }
+  /* The table strip reaches the panel's edges, so the full width is usable.
+     No horizontal padding here on purpose: a sticky cell pins to the padding
+     box, so 14px of padding leaves a 14px strip of scrolled-away content
+     visible to the left of the pinned column. The inset is put back on the
+     first column's own cells instead, where it scrolls with nothing. */
+  .table-scroll { margin: 0 -14px; }
   .table-scroll table { min-width: max-content; }
+  .table-scroll th:first-child,
+  .table-scroll td:first-child { padding-left: 14px; }
+  .table-scroll th.sortable:first-child { padding-left: 0; }
+  .table-scroll th.sortable:first-child a { padding-left: 14px; }
 
   /* The first column stays put while the rest scrolls under it, so a row is
      always identifiable. It needs its own background or the scrolling cells
@@ -686,7 +694,9 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
     position: sticky;
     left: 0;
     background: var(--panel);
-    box-shadow: 1px 0 0 var(--line);
+    /* A line down the right, and an opaque block to the left wide enough to
+       cover anything a rounding error would otherwise let through. */
+    box-shadow: 1px 0 0 var(--line), -24px 0 0 var(--panel);
   }
   th.sortable:first-child { background: var(--panel); }
 
@@ -710,7 +720,10 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
   main { padding: 14px 12px 40px; }
   header { padding: 12px 12px 8px; }
   .panel { padding: 12px 12px 14px; }
-  .table-scroll { margin: 0 -12px; padding: 0 12px; }
+  .table-scroll { margin: 0 -12px; }
+  .table-scroll th:first-child,
+  .table-scroll td:first-child { padding-left: 12px; }
+  .table-scroll th.sortable:first-child a { padding-left: 12px; }
   .nav { font-size: 12.5px; }
   .nav-top { font-size: 13px; }
   h1 { font-size: 18px; }
