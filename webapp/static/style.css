@@ -686,6 +686,27 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
   .table-scroll th.sortable:first-child { padding-left: 0; }
   .table-scroll th.sortable:first-child a { padding-left: 14px; }
 
+  /* A pinned column wider than the screen hides the very thing it is meant to
+     let you scroll behind it. The events table's first column is as wide as
+     the longest event name - 400px and more - so on a phone it covered the
+     viewport and scrolling appeared to do nothing. Capped and ellipsised; the
+     cell is a link to the full record either way.
+
+     The cap sits on the link rather than the cell because a table cell's
+     max-width is advisory under automatic layout and the content can win. */
+  .table-scroll tbody td:first-child { max-width: 46vw; }
+  .table-scroll tbody td:first-child > a {
+    display: inline-block;
+    /* Per cent of the cell, not of the viewport: 46vw here would be the cell's
+       full width again and the link would hang 24px past its own padding,
+       outside the pinned background and over the scrolling columns. */
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
   /* The first column stays put while the rest scrolls under it, so a row is
      always identifiable. It needs its own background or the scrolling cells
      show through. */
@@ -694,6 +715,7 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
     position: sticky;
     left: 0;
     background: var(--panel);
+    z-index: 2;
     /* A line down the right, and an opaque block to the left wide enough to
        cover anything a rounding error would otherwise let through. */
     box-shadow: 1px 0 0 var(--line), -24px 0 0 var(--panel);
