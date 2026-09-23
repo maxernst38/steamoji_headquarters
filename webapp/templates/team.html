@@ -84,6 +84,7 @@
       <div class="card"><span class="k">Elo</span><span class="v">{{ elo.elo|round|int if elo else '—' }}</span><span class="f">{% if elo %}{{ elo.matches }} matches{% endif %}</span></div>
     </div>
 
+    <div class="table-scroll">
     <table>
       <thead><tr><th>Event</th><th class="right">CCWM</th><th class="right">OPR</th>
         <th class="right">DPR</th><th class="right">Alliances</th><th>Fit</th></tr></thead>
@@ -100,6 +101,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
     <p class="note">
       <strong>OPR</strong> is what this team contributed to its own alliance's score,
@@ -130,6 +132,7 @@
   <div class="panel">
     <h2>Allies</h2>
     {% if partners %}
+    <div class="table-scroll">
     <table>
       <thead><tr><th>Team</th><th>Name</th><th class="right">Together</th>
         <th class="right">Eliminations</th>
@@ -150,6 +153,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% if partners|length > 12 %}
     <p class="note">Top 12 of {{ partners|length }} distinct allies.</p>
     {% endif %}
@@ -190,6 +194,7 @@
   <div class="panel">
     <h2>Matches</h2>
     {% if matches %}
+    <div class="table-scroll">
     <table>
       <thead><tr>
         <th>Date</th><th>Event</th><th>Match</th>
@@ -234,6 +239,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
     <p class="note">This team has no matches recorded. <a href="/matches">Add one.</a></p>
     {% endif %}

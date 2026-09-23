@@ -301,6 +301,7 @@ button.status.done:hover { background: var(--done-hover); }
 [data-program="v5rc"] .program-switch a[data-program-code="v5rc"],
 [data-program="viqrc"] .program-switch a[data-program-code="viqrc"] { color: var(--on-accent); }
 .nav .program-switch a:hover { color: var(--text); }
+.program-switch .label-short { display: none; }
 [data-program="v5rc"] .program-switch a[data-program-code="v5rc"]:hover,
 [data-program="viqrc"] .program-switch a[data-program-code="viqrc"]:hover { color: var(--on-accent); }
 
@@ -619,3 +620,98 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
 .video-play:hover .video-play-mark { transform: scale(1.06); }
 .video-frame { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; }
 .match-footage figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+/* --- phones -------------------------------------------------------------
+   A 14-column teams table used to make <body> wider than the screen, and
+   everything else - the program switch, the search button, whole paragraphs -
+   was clipped along with it. Each table now scrolls inside its own strip, so
+   the page itself always fits. */
+
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 720px) {
+  header { padding: 14px 16px 10px; }
+  main { padding: 16px 16px 48px; }
+  h1 { font-size: 19px; }
+  .sub { font-size: 12.5px; }
+
+  .panel { padding: 14px 14px 16px; border-radius: 10px; }
+  .panel h2 { font-size: 12px; }
+
+  /* Both nav rows wrap, so the program switch drops to a line of its own
+     instead of being cut in half at the right edge. */
+  .nav { flex-wrap: wrap; gap: 10px 14px; }
+  .nav-top { margin-bottom: 4px; }
+  .program-switch { margin-left: auto; }
+  /* "VEX V5" and "VEX IQ" need 145px of a 390px nav row; the short names say
+     the same thing in a third of the space. */
+  .program-switch .label-full { display: none; }
+  .program-switch .label-short { display: inline; }
+  .nav .program-switch a { padding: 3px 12px; }
+
+  /* Search and its buttons stack rather than running off the side. */
+  .row { gap: 8px; }
+  .search { flex: 1 1 100%; min-width: 0; }
+
+  /* Under 16px, iOS zooms the page in when a field is focused and leaves it
+     zoomed. The size is the fix; there is no other way to stop it. */
+  input, select, .search, .form input, .form select { font-size: 16px; }
+
+  /* Comfortably tappable without changing the desktop proportions. */
+  button { padding: 11px 16px; }
+  button.small, button.stream-button { padding: 7px 12px; }
+
+  .filters-panel { padding: 12px; gap: 10px; }
+  .filters-panel select, .filters-panel label { width: 100%; }
+  .table-toolbar { flex-wrap: wrap; }
+  .add-toggle { margin-left: 0; }
+
+  /* Tabs scroll sideways instead of wrapping into a tall block. */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { white-space: nowrap; }
+
+  .cards { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .card { padding: 10px 12px; }
+  .card .v { font-size: 19px; }
+
+  /* The table strip reaches the panel's edges, so the full width is usable. */
+  .table-scroll { margin: 0 -14px; padding: 0 14px; }
+  .table-scroll table { min-width: max-content; }
+
+  /* The first column stays put while the rest scrolls under it, so a row is
+     always identifiable. It needs its own background or the scrolling cells
+     show through. */
+  .table-scroll th:first-child,
+  .table-scroll td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--panel);
+    box-shadow: 1px 0 0 var(--line);
+  }
+  th.sortable:first-child { background: var(--panel); }
+
+  /* A 49-character URL with no spaces in it is wider than the screen and has
+     nowhere to break; let it break anywhere rather than push the page out.
+     Not inside tables, where a team number breaking across lines would be
+     worse than scrolling. */
+  .mono, .note { overflow-wrap: anywhere; }
+  .table-scroll .mono { overflow-wrap: normal; }
+
+  .guide { max-width: 100%; }
+  .compare-pair { grid-template-columns: 1fr; }
+  .guide-steps li { grid-template-columns: 28px 1fr; gap: 10px; }
+  .video-play-mark { width: 48px; height: 48px; font-size: 18px; }
+
+  .bracket { gap: 10px; }
+  .bracket-round { min-width: 170px; }
+}
+
+@media (max-width: 420px) {
+  main { padding: 14px 12px 40px; }
+  header { padding: 12px 12px 8px; }
+  .panel { padding: 12px 12px 14px; }
+  .table-scroll { margin: 0 -12px; padding: 0 12px; }
+  .nav { font-size: 12.5px; }
+  .nav-top { font-size: 13px; }
+  h1 { font-size: 18px; }
+}

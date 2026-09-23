@@ -122,6 +122,7 @@
 <div class="panel">
   <h2>Awards</h2>
   {% if awards %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Award</th><th>Winner</th></tr></thead>
     <tbody>
@@ -136,6 +137,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% elif status == 'upcoming' %}
   <p class="note">This event has not happened yet, so no awards have been given.</p>
   {% else %}
@@ -149,6 +151,7 @@
   <p class="note">Ranked by average Teamwork score, which is what decides seeding in this program.</p>
   {% endif %}
   {% if rankings %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th class="right">Rank</th><th>Team</th>
       {%- if coop %}<th class="right">Average</th><th class="right">High</th><th class="right">Total</th>
@@ -174,6 +177,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if rankings|length > 25 %}<p class="note">Top 25 of {{ rankings|length }}.</p>{% endif %}
   {% else %}<p class="note">No rankings recorded.</p>{% endif %}
 </div>
@@ -181,6 +185,7 @@
 <div class="panel">
   <h2>Skills</h2>
   {% if skills %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th class="right">#</th><th>Team</th><th class="right">Driver</th>
       <th class="right">Programming</th><th class="right">Total</th></tr></thead>
@@ -196,6 +201,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if skills|length > 15 %}<p class="note">Top 15 of {{ skills|length }} teams, ranked by combined score.</p>{% endif %}
   {% else %}<p class="note">No skills runs recorded.</p>{% endif %}
 </div>

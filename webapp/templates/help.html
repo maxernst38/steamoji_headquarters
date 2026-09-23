@@ -20,6 +20,7 @@
     every team's record is 0–0–N with a 0% win rate; that is why those columns are absent rather
     than filled with zeroes.
   </p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Figure</th><th>What it is</th></tr></thead>
     <tbody>
@@ -34,6 +35,7 @@
         than derived, ordered by average score.</td></tr>
     </tbody>
   </table>
+  </div>
   <p class="note">
     Event importance below still applies, minus its field-strength term: that term is the mean
     Elo of the registered teams, and there is no Elo here. Those events score on level and size
@@ -147,6 +149,7 @@ CCWM = OPR - DPR</pre>
     three parts are shown under every score as <span class="mono">level/size/strength</span>
     instead of being collapsed into one opaque figure.
   </p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Component</th><th class="right">Weight</th><th>What it reads</th></tr></thead>
     <tbody>
@@ -161,6 +164,7 @@ CCWM = OPR - DPR</pre>
           {{ min_rated }} rated teams</td></tr>
     </tbody>
   </table>
+  </div>
   <p class="note">
     When field strength is unknown, the weights are <strong>renormalised over what is known</strong>
     rather than scoring the event as weak. Otherwise the column would measure how much data we
@@ -175,6 +179,7 @@ CCWM = OPR - DPR</pre>
     derived, and measuring shows they are badly calibrated.</strong>
   </p>
   {% if field_mean_spread %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Aggregate over {{ rated_events }} rated fields</th><th class="right">Min</th>
       <th class="right">Median</th><th class="right">Max</th><th class="right">Span</th>
@@ -190,6 +195,7 @@ CCWM = OPR - DPR</pre>
         <td class="num right">{{ ((field_top_spread.span / (ceiling - floor)) * 100)|round|int }}%</td></tr>
     </tbody>
   </table>
+  </div>
   <p class="note">
     Every field mean in your catalog falls between {{ field_mean_spread.min }} and
     {{ field_mean_spread.max }} — a {{ field_mean_spread.span }}-point span inside a
@@ -209,6 +215,7 @@ CCWM = OPR - DPR</pre>
 
 <div class="panel">
   <h2>Smaller rules worth knowing</h2>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Number</th><th>How it works</th></tr></thead>
     <tbody>
@@ -248,6 +255,7 @@ CCWM = OPR - DPR</pre>
         different teams into one record.</td></tr>
     </tbody>
   </table>
+  </div>
 </div>
 
 <p class="note">
