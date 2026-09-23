@@ -568,9 +568,18 @@ def import_season(season_id, client=None, region=None, with_teams=True,
     totals = {"events": 0, "teams": 0, "matches": 0,
               "past": 0, "ongoing": 0, "upcoming": 0, "unknown": 0}
     failures = []
-    refreshed = 0
+    refreshed, untouched = 0, 0
     for index, payload in enumerate(events, start=1):
         fetch = bool(refresh(payload)) if per_event else refresh
+        # An event that is not being re-fetched is not re-saved either. Saving
+        # is a read-modify-write of the whole table per match - 140ms against a
+        # 5MB matches.json - so re-storing cached payloads for a whole season
+        # costs about 26 minutes of pure disk churn to write back exactly what
+        # was already there. The predicate has already decided this event
+        # cannot have changed; believing it is the entire point.
+        if per_event and not fetch:
+            untouched += 1
+            continue
         refreshed += 1 if fetch else 0
         try:
             counts = _store_event(payload, client, with_teams, with_matches,
@@ -620,11 +629,13 @@ def import_season(season_id, client=None, region=None, with_teams=True,
             f"{totals['matches']} matches, {len(catalog.list_teams(directory))} teams")
         log(f"  {client.requests_made} requests, {client.cache_hits} from cache, "
             f"{len(failures)} still failing"
-            + (f", {refreshed} event(s) re-fetched" if per_event else ""))
+            + (f", {refreshed} event(s) re-fetched, {untouched} unchanged and untouched"
+               if per_event else ""))
         for sku, why in failures:
             log(f"  FAILED {sku}: {why[:90]}")
     totals["failures"] = failures
     totals["refreshed"] = refreshed if per_event else None
+    totals["untouched"] = untouched if per_event else None
     return totals
 
 
