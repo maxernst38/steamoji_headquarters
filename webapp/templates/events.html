@@ -81,6 +81,7 @@
   {% endif %}
   {% set filters = ('q=' ~ query|urlencode ~ '&' if query else '') ~ ('status=' ~ chosen ~ '&' if chosen else '') ~ ('region=' ~ (region or all_regions)|urlencode ~ '&') ~ ('grade=' ~ grade|urlencode ~ '&' if grade else '') ~ ('stream=' ~ stream ~ '&' if stream else '') %}
   {% if rows %}
+  <div class="table-scroll">
   <table>
     <thead>
       <tr>
@@ -130,6 +131,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if pages > 1 %}
   {% set base = '/events?' ~ filters ~ 'sort=' ~ sort ~ '&dir=' ~ dir ~ '&' ~ ('near=1&' if near else '') %}
   <div class="row">
