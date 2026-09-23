@@ -632,22 +632,40 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
 @media (max-width: 720px) {
   header { padding: 14px 16px 10px; }
   main { padding: 16px 16px 48px; }
-  h1 { font-size: 19px; }
-  .sub { font-size: 12.5px; }
+  h1 { font-size: 21px; }
+  .sub { font-size: 13.5px; }
 
   .panel { padding: 14px 14px 16px; border-radius: 10px; }
-  .panel h2 { font-size: 12px; }
+  .panel h2 { font-size: 13px; }
+
+  /* Read at arm's length on a phone, not on a desk. Everything here is a
+     size, not a layout: the arrangement is the same as above. */
+  body { font-size: 16px; }
+  table { font-size: 14.5px; }
+  th { font-size: 12.5px; }
+  td, th { padding: 10px 10px; }
+  .note, .item .meta, .filters-active { font-size: 13.5px; }
+  .tag { font-size: 12px; padding: 3px 9px; }
+  .nav-top { font-size: 15px; }
+  .nav-sections { font-size: 14px; }
+  .card .k { font-size: 12px; }
+  .card .v { font-size: 21px; }
 
   /* Both nav rows wrap, so the program switch drops to a line of its own
      instead of being cut in half at the right edge. */
-  .nav { flex-wrap: wrap; gap: 10px 14px; }
+  .nav { flex-wrap: wrap; gap: 4px 16px; }
   .nav-top { margin-bottom: 4px; }
+  /* Bare text links were 19px tall - the smallest target on the page, and the
+     one people press most. Padding makes them about 38px without moving
+     anything. */
+  .nav a { padding: 9px 0; }
+  .nav-top a:not(.brand) { padding-bottom: 9px; }
   .program-switch { margin-left: auto; }
   /* "VEX V5" and "VEX IQ" need 145px of a 390px nav row; the short names say
      the same thing in a third of the space. */
   .program-switch .label-full { display: none; }
   .program-switch .label-short { display: inline; }
-  .nav .program-switch a { padding: 3px 12px; }
+  .nav .program-switch a { padding: 8px 14px; }
 
   /* Search and its buttons stack rather than running off the side. */
   .row { gap: 8px; }
@@ -657,9 +675,23 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
      zoomed. The size is the fix; there is no other way to stop it. */
   input, select, .search, .form input, .form select { font-size: 16px; }
 
-  /* Comfortably tappable without changing the desktop proportions. */
-  button { padding: 11px 16px; }
-  button.small, button.stream-button { padding: 7px 12px; }
+  /* Tappable: roughly 44px tall, which is the smallest target a thumb hits
+     reliably. Everything that is pressed gets it, not just <button>. */
+  button { padding: 12px 18px; font-size: 15px; }
+  button.small { padding: 9px 14px; font-size: 14px; }
+  button.stream-button { padding: 10px 14px; font-size: 14px; min-width: 96px; }
+
+  .tab { padding: 11px 18px; font-size: 15px; }
+  .tabs { gap: 8px; }
+
+  .filters-toggle { padding: 11px 16px; font-size: 15px; }
+  .filters-count { font-size: 13px; min-width: 22px; line-height: 22px; }
+  .add-toggle { padding: 11px 16px; }
+
+  /* A checkbox at its default 13px is a poor target; the label goes with it. */
+  .filters-panel input[type="checkbox"] { width: 20px; height: 20px; }
+  .filters-panel label { font-size: 15px; gap: 9px; padding: 4px 0; }
+  .filters-panel select { padding: 11px 10px; }
 
   .filters-panel { padding: 12px; gap: 10px; }
   .filters-panel select, .filters-panel label { width: 100%; }
