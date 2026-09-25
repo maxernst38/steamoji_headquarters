@@ -1111,9 +1111,12 @@ def page_event(key):
         entry["total"] = (entry["driver"] or 0) + (entry["programming"] or 0)
     skill_rows = sorted(combined.values(), key=lambda e: -e["total"])
 
+    status = catalog.event_status(event)
+    roster = _event_roster(event, matches, detail, status)
+
     return render_template(
-        "event.html", section="events", event=event,
-        status=catalog.event_status(event), grade=catalog.event_grade(event),
+        "event.html", section="events", event=event, roster=roster,
+        status=status, grade=catalog.event_grade(event),
         location=_location_label(event.get("location")),
         bracket=bracket, awards=awards, highlights=AWARD_HIGHLIGHTS,
         champion=champion, finalist=finalist,
@@ -1126,6 +1129,38 @@ def page_event(key):
         with_footage=sum(1 for m in matches if catalog.segment_of(m)),
         webcast=_webcast(event),
     )
+
+
+def _event_roster(event, matches, detail, status):
+    """The teams at an event, each with their season record and Elo.
+
+    Before the event this is the registration list. Once it has happened, the
+    teams that actually played (in a match or on the rankings) replace it, since
+    registered teams can withdraw; if nothing was recorded, registration is all
+    there is, and `attended` is False so the page can say so.
+    """
+    registered = [str(t).upper() for t in (event.get("teams") or [])]
+    played = {t for m in matches for t in catalog.teams_in(m)}
+    played |= {str(r["team"]).upper() for r in (detail.get("rankings") or []) if r.get("team")}
+    attended = status in ("past", "ongoing") and bool(played)
+    numbers = sorted(played if attended else registered)
+
+    teams, elo = _teams(), _ratings()[1]
+    by_team = {}
+    for match in _matches().values():
+        for number in catalog.teams_in(match):
+            by_team.setdefault(number, []).append(match)
+    scoring = _scoring()
+    rows = []
+    for number in numbers:
+        team = teams.get(number) or {}
+        record = catalog.team_record(by_team.get(number, []), number, scoring)
+        rows.append({"number": number, "name": team.get("name"),
+                     "organization": team.get("organization"),
+                     "location": team.get("location"),
+                     "elo": (elo.get(number) or {}).get("elo"), **record})
+    rows.sort(key=lambda r: (r["elo"] is None, -(r["elo"] or 0), r["number"]))
+    return {"rows": rows, "attended": attended, "registered": len(registered)}
 
 
 def _webcast(event, table=None):
