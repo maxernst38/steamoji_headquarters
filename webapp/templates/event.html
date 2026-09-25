@@ -38,6 +38,66 @@
 {% endif %}
 
 <div class="panel">
+  <h2>{{ 'Teams that attended' if roster.attended else 'Registered teams' }}</h2>
+  {% if roster.rows %}
+  <div class="row" style="margin-top:0">
+    <input id="roster-filter" class="search mono" type="search" autocomplete="off"
+           placeholder="Search by team number, name or organization">
+    <span class="note" id="roster-count">{{ roster.rows|length }} team{{ '' if roster.rows|length == 1 else 's' }}</span>
+  </div>
+  <div class="table-scroll">
+  <table id="roster-table">
+    <thead><tr><th>Team</th><th>Name</th><th>Organization</th>
+      {%- if coop %}<th class="right">Avg score</th>{% else %}<th class="right">Record</th><th class="right">Elo</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for r in roster.rows %}
+      <tr data-search="{{ (r.number ~ ' ' ~ (r.name or '') ~ ' ' ~ (r.organization or '') ~ ' ' ~ (r.location or ''))|lower }}">
+        <td class="num"><a href="/team/{{ r.number }}"><strong>{{ r.number }}</strong></a></td>
+        <td>{{ r.name or '—' }}</td>
+        <td class="muted">{{ r.organization or '—' }}</td>
+        {%- if coop %}
+        <td class="num right">{{ r.avg_score if r.avg_score is not none else '—' }}</td>
+        {%- else %}
+        <td class="num right">{% if r.scored_matches %}{{ r.wins }}–{{ r.losses }}–{{ r.ties }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num right">{{ r.elo|round|int if r.elo is not none else '—' }}</td>
+        {%- endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note" id="roster-empty" hidden>No team matches that search.</p>
+  <p class="note">
+    {% if roster.attended %}Teams that played a match or were ranked at this event
+    ({{ roster.rows|length }}{% if roster.registered %}, of {{ roster.registered }} registered{% endif %}).
+    {% elif status == 'upcoming' %}Teams currently registered; the list can change until the event runs.
+    {% else %}No matches or rankings are recorded for this event, so this is the registration list.{% endif %}
+    Record and Elo are for the whole season so far, sorted by Elo.
+  </p>
+  <script>
+  (() => {
+    const input = document.getElementById('roster-filter');
+    const rows = [...document.querySelectorAll('#roster-table tbody tr')];
+    const count = document.getElementById('roster-count');
+    input.addEventListener('input', () => {
+      const words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const row of rows) {
+        const hit = words.every((w) => row.dataset.search.includes(w));
+        row.hidden = !hit;
+        if (hit) shown++;
+      }
+      count.textContent = words.length ? `${shown} of ${rows.length} teams` : `${rows.length} teams`;
+      document.getElementById('roster-empty').hidden = shown > 0;
+    });
+  })();
+  </script>
+  {% else %}
+  <p class="note">No teams are registered for this event yet.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
   <h2>Webcast</h2>
   {% if webcast %}
   <div class="row" style="margin-top:0">
@@ -122,6 +182,7 @@
 <div class="panel">
   <h2>Awards</h2>
   {% if awards %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Award</th><th>Winner</th></tr></thead>
     <tbody>
@@ -136,6 +197,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% elif status == 'upcoming' %}
   <p class="note">This event has not happened yet, so no awards have been given.</p>
   {% else %}
@@ -149,6 +211,7 @@
   <p class="note">Ranked by average Teamwork score, which is what decides seeding in this program.</p>
   {% endif %}
   {% if rankings %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th class="right">Rank</th><th>Team</th>
       {%- if coop %}<th class="right">Average</th><th class="right">High</th><th class="right">Total</th>
@@ -174,6 +237,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if rankings|length > 25 %}<p class="note">Top 25 of {{ rankings|length }}.</p>{% endif %}
   {% else %}<p class="note">No rankings recorded.</p>{% endif %}
 </div>
@@ -181,6 +245,7 @@
 <div class="panel">
   <h2>Skills</h2>
   {% if skills %}
+  <div class="table-scroll">
   <table>
     <thead><tr><th class="right">#</th><th>Team</th><th class="right">Driver</th>
       <th class="right">Programming</th><th class="right">Total</th></tr></thead>
@@ -196,6 +261,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if skills|length > 15 %}<p class="note">Top 15 of {{ skills|length }} teams, ranked by combined score.</p>{% endif %}
   {% else %}<p class="note">No skills runs recorded.</p>{% endif %}
 </div>

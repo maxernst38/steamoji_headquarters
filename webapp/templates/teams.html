@@ -72,6 +72,7 @@
   </form>
 
   {% if rows %}
+  <div class="table-scroll">
   <table id="teams-table">
     <thead>
       <tr>
@@ -95,6 +96,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   <p class="note" id="empty-filter" hidden>No team matches that filter.</p>
   {% if defaulted %}
   <p class="note">

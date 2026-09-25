@@ -20,7 +20,8 @@
       <a href="/program/{{ option.code }}?next={{ here|urlencode }}"
          data-program-code="{{ option.code }}"
          title="Show {{ option.name }}"
-         {% if option.code == program.code %}aria-current="true"{% endif %}>{{ option.label }}</a>
+         {% if option.code == program.code %}aria-current="true"{% endif %}
+         ><span class="label-full">{{ option.label }}</span><span class="label-short">{{ option.short }}</span></a>
       {% endfor %}
     </span>
   </nav>
