@@ -8,7 +8,14 @@ docs/
 archive/
 training/
 detection/
-calibration/
+# The simulator's field is drawn from calibration/field_layout.py, so that one
+# module ships. It imports OpenCV only inside the two functions that need it,
+# which is what makes it safe to keep here; the rest of the package does not.
+calibration/*.py
+!calibration/__init__.py
+!calibration/field_layout.py
+calibration/__pycache__/
+calibration/README.md
 deploy/
 pipeline.py
 track.py

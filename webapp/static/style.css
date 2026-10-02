@@ -621,6 +621,215 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
 .video-frame { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; }
 .match-footage figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
 
+/* --- Tools → the drive simulator ------------------------------------- */
+
+/* The field's height, and with it the width of the column it sits in. The
+   starting value is everything else on a page meant to fit one screen - the
+   two navs, the heading, the telemetry strip, the button row and the padding
+   around them - taken off the viewport. The script then searches for the
+   largest value that actually fits, because the button row wraps at some
+   widths and no constant is right on every screen. */
+#sim { --sim-field: calc(100vh - 366px); }
+
+/* This page ends at the button row, so it does not need the long tail of
+   space the scrolling pages leave under themselves. */
+main:has(#sim) { padding-bottom: 18px; }
+
+/* The field beside its controls, and both on one screen: the point of the
+   page is changing a number and feeling the difference, which does not work
+   if the slider is a scroll away from the robot. Nothing overlaps anything -
+   the telemetry that used to sit on top of the field has its own strip. */
+.sim-layout {
+  display: grid;
+  /* The field is limited by the height left on the screen, not by the width
+     of the page, so its column is exactly as wide as that height allows and
+     everything else goes to the sliders. `--wide` is the field's own aspect,
+     set on the page from the program's field size. */
+  grid-template-columns:
+    minmax(0, calc(var(--wide, 1) * var(--sim-field) + 30px))
+    minmax(360px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.sim-stage { display: flex; flex-direction: column; gap: 10px; }
+
+/* One line: every pixel this strip takes is a pixel off the field. */
+.sim-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.sim-gauge { display: flex; align-items: baseline; gap: 5px; }
+.sim-gauge .k { color: var(--muted); }
+.sim-gauge .v {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  color: var(--text);
+  min-width: 3.6ch;
+  text-align: right;
+}
+.sim-gauge .u { color: var(--muted); }
+.sim-flag { color: var(--warn); font-weight: 600; opacity: 0; }
+.sim-flag.on { opacity: 1; }
+
+/* One bar a side, filling with how hard that side is being driven: the state
+   of the drivetrain, in the same strip as the speed it produces. */
+.sim-bars { margin-left: auto; display: flex; flex-direction: column; gap: 3px; }
+.sim-bar { display: flex; align-items: center; gap: 6px; }
+.sim-bar em { font-style: normal; font-size: 10px; color: var(--muted); width: 8px; }
+.sim-bar i {
+  display: block;
+  position: relative;
+  width: 64px; height: 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--inset);
+  overflow: hidden;
+}
+.sim-bar i span { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); }
+/* Driven backwards reads differently from driven on, without a second bar. */
+.sim-bar.back i span { background: var(--muted); }
+
+/* The canvas is sized by the height left on the screen rather than by the
+   width of its column, so the whole field is always visible without
+   scrolling and the script never has to letterbox it. */
+.sim-canvas {
+  position: relative;
+  /* Width from the height it is allowed, so the field keeps its shape and the
+     script never has to letterbox it inside a box of the wrong aspect. */
+  width: min(100%, calc(var(--wide, 1) * var(--sim-field)));
+  aspect-ratio: var(--ar);
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sim-canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+/* Buttons first, then the keys that do the same things: one line where the
+   field is wide enough, two where it is not. */
+.sim-footer { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.sim-keys { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11.5px; color: var(--muted); }
+/* The keys that do nothing in the mode being driven are not shown at all,
+   rather than shown greyed: there are five of them and the row is one line. */
+#sim .sim-keys[data-for] { display: none; }
+#sim[data-control="tank"] .sim-keys[data-for="tank"],
+#sim[data-control="arcade"] .sim-keys[data-for="arcade"] { display: flex; }
+.sim-keycap b {
+  display: inline-block;
+  min-width: 15px;
+  margin-right: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--control);
+  color: var(--text);
+  font-weight: 600;
+  text-align: center;
+}
+.sim-actions { display: flex; gap: 6px; }
+.sim-actions button { padding: 6px 12px; font-size: 12.5px; }
+.sim-keys { margin-left: auto; }
+/* A toggle that is on: these buttons have no border to colour, so the ring
+   is drawn inside them. */
+button[data-action="trail"][aria-pressed="true"],
+button[data-action="pause"][aria-pressed="true"] {
+  background: var(--control-hover);
+  box-shadow: inset 0 0 0 1px var(--accent-dim);
+}
+.sim-touch { display: none; }
+
+/* What the build can do, measured by running the same model the robot uses,
+   so the panel can never disagree with what driving it feels like. */
+.sim-stats { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.sim-stats .card { padding: 7px 9px; }
+.sim-stats .v { font-size: 15px; }
+.sim-stats .f { line-height: 1.35; }
+
+.sim-presets-row { margin-top: 0; margin-bottom: 12px; align-items: center; gap: 8px; }
+.sim-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Two columns of groups where there is room for them. Seventeen parameters in
+   one column would be twice the height of the field. */
+#sim-params { column-count: 2; column-gap: 18px; }
+.sim-group { break-inside: avoid; margin-bottom: 14px; }
+.sim-group h3 {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sim-group-body { display: flex; flex-direction: column; gap: 5px; }
+
+/* Label, slider and exact value on one line: the slider is for finding a
+   feel, the box for a number someone already knows. */
+.sim-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(46px, 1fr) 56px;
+  gap: 6px;
+  align-items: center;
+}
+.sim-row .sim-label { font-size: 11.5px; line-height: 1.25; color: var(--text); }
+/* A dotted underline is the only sign that hovering says more, so it goes on
+   exactly the labels that have something more to say. */
+.sim-row .sim-label.more { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; cursor: help; }
+.sim-row input[type="range"] { width: 100%; height: 18px; margin: 0; accent-color: var(--accent); }
+.sim-row .sim-num,
+.sim-row select {
+  background: var(--inset);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 5px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: 100%;
+}
+.sim-row select { font-family: inherit; }
+/* The slider is the coarse control, so the box does not need spinners - and
+   without them the value has room to be read. */
+.sim-row .sim-num { -moz-appearance: textfield; appearance: textfield; }
+.sim-row .sim-num::-webkit-outer-spin-button,
+.sim-row .sim-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sim-row-wide { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.sim-row-wide select { grid-column: 2 / -1; }
+
+/* A short screen - a school laptop is usually 768 tall - has to give up
+   something, and it is the panel's spacing rather than the field or a slider.
+   Only beside the field: stacked, the page scrolls anyway. */
+@media (min-width: 1081px) and (max-height: 800px) {
+  .sim-stats { gap: 6px; margin-bottom: 8px; }
+  .sim-stats .card { padding: 5px 8px; }
+  .sim-stats .v { font-size: 14px; }
+  .sim-presets-row { margin-bottom: 8px; }
+  .sim-group { margin-bottom: 7px; }
+  .sim-group-body { gap: 2px; }
+  .sim-controls h2 { margin-bottom: 8px; }
+  .sim-controls > .note { display: none; }
+}
+
+/* Shorter still, and the figures' one-line explanations go: the numbers they
+   sit under are the part that has to stay. */
+@media (min-width: 1081px) and (max-height: 740px) {
+  .sim-stats .f { display: none; }
+  .sim-stats .card { padding: 4px 8px; }
+  .sim-presets-row { margin-bottom: 6px; }
+}
+
+/* Below this the two columns of sliders stop fitting side by side, so the
+   field goes above the panel instead of beside it. */
+@media (max-width: 1080px) {
+  .sim-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Stacked, the field is width-limited again, but never taller than the
+     screen it has to share with the sliders. */
+  .sim-canvas { width: min(100%, calc(var(--wide, 1) * 55vh)); }
+}
 /* --- phones -------------------------------------------------------------
    A 14-column teams table used to make <body> wider than the screen, and
    everything else - the program switch, the search button, whole paragraphs -
@@ -628,6 +837,7 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
    the page itself always fits. */
 
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 
 @media (max-width: 720px) {
   header { padding: 14px 16px 10px; }
@@ -768,6 +978,26 @@ details.suggestions > summary { cursor: pointer; color: var(--muted); font-size:
 
   .bracket { gap: 10px; }
   .bracket-round { min-width: 170px; }
+
+  /* The field first, the controls under it: on a phone the panel would
+     otherwise squeeze the field into a stamp. The simulator needs a keyboard,
+     which is said on the page rather than hidden here. */
+  /* The gauges alone fill a phone's width, and the side-power bars and key
+     hints mean nothing without a keyboard to drive with. */
+  .sim-bars { display: none; }
+  .sim-keys { display: none; }
+  .sim-touch { display: block; }
+  .sim-actions { margin-left: 0; }
+  .sim-canvas { width: 100%; }
+  /* One column of sliders, and rows tall enough to drag with a thumb. */
+  #sim-params { column-count: 1; }
+  .sim-row { grid-template-columns: minmax(0, 1fr) minmax(70px, 1fr) 62px; gap: 8px; }
+  .sim-row .sim-label { font-size: 14px; }
+  .sim-row input[type="range"] { height: 30px; }
+  .sim-row .sim-num, .sim-row select { font-size: 16px; padding: 7px 6px; }
+  .sim-gauge .v { font-size: 17px; }
+  .sim-telemetry { font-size: 13px; }
+  .sim-stats .v { font-size: 16px; }
 }
 
 @media (max-width: 420px) {

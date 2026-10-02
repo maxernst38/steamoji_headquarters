@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Drive simulator · VEX Tracker{% endblock %}
+{% block heading %}Drive simulator{% endblock %}
+{% block subheading %}{{ program.name }} · a tank drivetrain you can rebuild while you drive it{% endblock %}
+
+{% block content %}
+{# Every number the simulation needs comes from the server so the two programs
+   differ in one place - webapp/drivesim.py - rather than in the script.
+
+   Single quotes: tojson escapes < > & and ' for HTML, but leaves the double
+   quotes that JSON is made of, so the attribute has to be the other kind. #}
+{# The field's own shape travels with the page, so both the layout and the
+   canvas can be sized from it: 12ft square for V5, 6ft by 8ft for IQ. #}
+<div id="sim" data-config='{{ sim|tojson }}' data-control="{{ sim.defaults.control }}"
+     style="--ar: {{ sim.field.width }} / {{ sim.field.height }};
+            --wide: {{ '%.4f'|format(sim.field.width / sim.field.height) }}">
+  <div class="sim-layout">
+    <div class="panel sim-stage">
+      {# Telemetry in its own strip rather than floating over the field: at a
+         glance it is the speed the build in the panel beside it produces. #}
+      <div class="sim-telemetry">
+        <div class="sim-gauge"><span class="k">Speed</span><span class="v" id="sim-speed">0.00</span><span class="u">ft/s</span></div>
+        <div class="sim-gauge"><span class="k">Turn</span><span class="v" id="sim-turn">0</span><span class="u">&deg;/s</span></div>
+        <div class="sim-gauge"><span class="k">Battery</span><span class="v" id="sim-volts">{{ '%.1f'|format(sim.defaults.battery) }}</span><span class="u">V</span></div>
+        <div class="sim-flag" id="sim-state"></div>
+        <div class="sim-bars">
+          <div class="sim-bar" id="sim-bar-l"><em>L</em><i><span></span></i></div>
+          <div class="sim-bar" id="sim-bar-r"><em>R</em><i><span></span></i></div>
+        </div>
+      </div>
+
+      <div class="sim-canvas"><canvas id="sim-field"></canvas></div>
+
+      <div class="sim-footer">
+        {# One legend per control mode; the panel's Controls setting decides
+           which is shown, through data-control on #sim. #}
+        <div class="sim-keys" data-for="tank">
+          <div class="sim-keycap"><b>W</b><b>S</b> left side</div>
+          <div class="sim-keycap"><b>I</b><b>K</b> right side <span class="muted">or &uarr; &darr;</span></div>
+          <div class="sim-keycap"><b>Space</b> stop</div>
+          <div class="sim-keycap"><b>R</b> reset</div>
+          <div class="sim-keycap"><b>T</b> trail</div>
+        </div>
+        <div class="sim-keys" data-for="arcade">
+          <div class="sim-keycap"><b>W</b><b>S</b> drive <span class="muted">or &uarr; &darr;</span></div>
+          <div class="sim-keycap"><b>A</b><b>D</b> turn <span class="muted">or &larr; &rarr;</span></div>
+          <div class="sim-keycap"><b>Space</b> stop</div>
+          <div class="sim-keycap"><b>R</b> reset</div>
+          <div class="sim-keycap"><b>T</b> trail</div>
+        </div>
+        <div class="sim-actions">
+          <button type="button" data-action="reset">Reset</button>
+          <button type="button" class="small secondary" data-action="trail" aria-pressed="true">Trail</button>
+          <button type="button" class="small secondary" data-action="pause" aria-pressed="false">Pause</button>
+        </div>
+      </div>
+      {# Said rather than hidden: the page still works for reading what a build
+         would do, it just cannot be driven without keys. #}
+      <p class="note sim-touch">Driving needs a keyboard. On a phone you can still change the build
+        and see what it would do.</p>
+    </div>
+
+    <aside class="panel sim-controls">
+      <h2>This build</h2>
+      <div id="sim-stats" class="cards sim-stats"></div>
+      <div class="row sim-presets-row">
+        <div id="sim-presets" class="sim-presets"></div>
+        <button type="button" class="small secondary" data-action="defaults">Defaults</button>
+      </div>
+      <div id="sim-params"></div>
+      <p class="note">
+        Settings are kept in this browser, separately for {{ program.label }};
+        a dotted label has more detail if you hover it.
+      </p>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/sim.js?v={{ asset_version }}"></script>
+{% endblock %}

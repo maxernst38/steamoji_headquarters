@@ -32,6 +32,7 @@ from storage import regions
 from storage import webcasts
 from storage import team_media
 from storage import parts_inventory
+from webapp import drivesim
 from webapp import parts
 from webapp import programs
 from webapp import videolinks
@@ -630,17 +631,20 @@ def _program_context():
 
 
 def _asset_version():
-    """The stylesheet's mtime, appended to its URL so an edit is never cached.
+    """The newest mtime among the site's assets, appended to their URLs.
 
     Flask serves static files with `no-cache`, which asks the browser to
     revalidate - but a page restored from the back/forward cache, or a reload
     that hits the memory cache, can still use an old copy. A changing URL
     cannot be reused by mistake.
     """
-    try:
-        return int(os.stat(os.path.join(app.static_folder, "style.css")).st_mtime)
-    except OSError:
-        return 0
+    newest = 0
+    for name in ("style.css", "app.js", "sim.js"):
+        try:
+            newest = max(newest, int(os.stat(os.path.join(app.static_folder, name)).st_mtime))
+        except OSError:
+            continue
+    return newest
 
 
 @app.route("/program/<code>")
@@ -1192,7 +1196,7 @@ def page_practice():
 
 @app.route("/tools")
 def page_tools():
-    """Tools has one section so far; the simulator joins it from its own branch."""
+    """Tools has no page of its own; Parts is the section students open most."""
     return redirect("/tools/parts")
 
 
@@ -1301,6 +1305,24 @@ def parts_status():
     except (requests.RequestException, RuntimeError, ValueError) as exc:
         return jsonify({"error": f"Could not save: {exc}"}), 502
     return jsonify({"state": {pid: state.get(pid, parts.DEFAULT) for pid in parts.IDS}})
+
+
+@app.route("/tools/sim")
+def page_tools_sim():
+    """The drive simulator.
+
+    The simulation runs entirely in the browser; the server only hands it the
+    starting numbers for whichever program is being shown, so the page is as
+    cheap to serve as any other and works unchanged on the read-only copy.
+    """
+    return render_template("tools_sim.html", tab="tools", section="sim",
+                           sim=drivesim.config(programs.current(request)))
+
+
+@app.route("/practice/drive")
+def page_practice_drive():
+    """Where the simulator lived while Practice was a tab of its own."""
+    return redirect("/tools/sim", code=301)
 
 
 @app.route("/help")
