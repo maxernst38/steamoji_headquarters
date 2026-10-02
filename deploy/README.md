@@ -13,6 +13,13 @@ the video workspace are not registered at all, so there is no route that can
 change the catalog and nothing to defend. Your own machine keeps every form,
 because adding matches and running the tracker is the local workflow.
 
+**One exception: parts status.** Tools → Parts lets students mark a part
+missing, low or in stock from the hosted site, behind a shared passcode. On a
+VPS it writes `data/parts_inventory.json`, which the service is already allowed
+to write; add `Environment=PARTS_PASSCODE=...` to `vex-tracker.service` to turn
+editing on. See [vercel.md](vercel.md#parts-status) for what the route can and
+cannot change.
+
 That also decides the size of the box. The workspace is what pulls in OpenCV,
 so a read-only server installs `requirements-web.txt` — Flask, requests, numpy,
 gunicorn — and not the analysis stack. Measured: **113 MB** resident with both

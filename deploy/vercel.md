@@ -64,8 +64,10 @@ minutes; later runs seed from the published snapshot and take a few.
    Build and Output settings alone — `vercel.json` already sets them.
 4. **Deploy.**
 
-No environment variables to add: Vercel sets `VERCEL` itself, which forces
-read-only mode and points the data root at `site-data/`.
+No environment variables are needed for the site to come up: Vercel sets
+`VERCEL` itself, which forces read-only mode and points the data root at
+`site-data/`. Parts status needs two more things - see
+[Parts status](#parts-status) below.
 
 ### 4. Set the production branch to `main`
 
@@ -126,8 +128,49 @@ certificate. If Cloudflare's proxy is on (orange cloud), set SSL mode to
   excluded in `.vercelignore` and never imported in read-only mode.
 - **Seconds per request.** Fine for pages, and the reason no long job can ever
   run there.
-- **A deploy is the only way data changes.** There is no writable disk, by
-  design.
+- **A deploy is the only way data changes** - except parts status, which lives
+  in Redis (below). There is no writable disk, by design.
+
+## Parts status
+
+Tools → Parts is the one thing students change on the hosted site. Everything
+else ships with the deployment, but a status set from the shop has to outlive
+the request, so it lives in Redis.
+
+### What a student can and cannot do
+
+- **Can:** set any listed part to need it, low stock or in stock, after entering
+  their name and the team passcode once per device.
+- **Cannot:** add, rename or remove parts - the list is `webapp/parts.py`, and
+  changes to it go through a commit. Nor can they touch anything else: the
+  route accepts only listed part IDs and those three values.
+- **Every change is logged** with the name they entered, and the page shows the
+  latest 15. It is a shared passcode, so a name is a claim, not a proof - enough
+  to see who to ask, not to stop someone determined.
+
+Changing the passcode signs everyone out, since each sign-in is signed with it.
+
+### Setting it up
+
+1. Vercel → Storage (or Marketplace) → **Upstash for Redis** → create a
+   database on the free tier and connect it to this project. That adds
+   `KV_REST_API_URL` and `KV_REST_API_TOKEN` to the project's environment.
+2. Settings → Environment Variables → add **`PARTS_PASSCODE`** for Production.
+   Something students can type but not guess: three words beats a number.
+3. Redeploy, so the function picks the variables up.
+
+Without step 1 the page shows the list with no statuses and says why. Without
+step 2 it shows statuses read-only.
+
+### Seeding it from the old index
+
+```
+export KV_REST_API_URL=...  KV_REST_API_TOKEN=...   # from the Vercel dashboard
+python -m tools.import_parts ~/steamoji_vex/part_index/data.json
+```
+
+Without those two variables the same command writes the local file instead,
+which is what your own copy reads.
 
 ## When the Learn guides land
 

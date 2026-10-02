@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Parts · VEX Tracker{% endblock %}
+{% block heading %}Parts{% endblock %}
+{% block subheading %}V5 parts on the shelf, and what needs buying{% endblock %}
+
+{% block content %}
+{% set counts = {'missing': 0, 'low': 0, 'have': 0} %}
+{% for status in state.values() %}{% set _ = counts.update({status: counts[status] + 1}) %}{% endfor %}
+
+{% if program.code != 'v5rc' %}
+<div class="panel notice">
+  <strong>This is the V5 parts list.</strong> There is no VEX IQ list yet, so these are V5 parts
+  whichever program the site is showing.
+</div>
+{% endif %}
+
+{% if store is none %}
+<div class="panel notice">
+  <strong>Statuses are not being saved on this deployment.</strong> It has no parts storage
+  configured &mdash; see <span class="mono">deploy/vercel.md</span>, &ldquo;Parts status&rdquo;.
+  The list below is the full parts list with no statuses.
+</div>
+{% elif store_error %}
+<div class="panel notice">
+  <strong>Could not load statuses.</strong> <span class="mono">{{ store_error }}</span>
+</div>
+{% endif %}
+
+<div class="panel parts-access">
+  {% if editor == 'local' %}
+  <p class="note">Editing the working copy. Tap a part to cycle it through <em>need it</em>,
+    <em>low stock</em> and <em>in stock</em>.</p>
+  {% elif editor %}
+  <div class="parts-access-row">
+    <p class="note">Editing as <strong>{{ editor }}</strong>. Tap a part to cycle it through
+      <em>need it</em>, <em>low stock</em> and <em>in stock</em>. Every change is logged by name.</p>
+    <form method="post" action="/tools/parts/lock" class="inline-form">
+      <button type="submit" class="secondary small">Sign out</button>
+    </form>
+  </div>
+  {% elif can_unlock %}
+  <form method="post" action="/tools/parts/unlock" class="form parts-unlock">
+    <label>Your name
+      <input name="name" maxlength="40" autocomplete="name" required>
+    </label>
+    <label>Team passcode
+      <input name="passcode" type="password" autocomplete="current-password" required>
+    </label>
+    <div class="form-actions">
+      <button type="submit">Start editing</button>
+      {% if unlock_failed %}<span class="warn parts-unlock-error">That passcode did not match.</span>{% endif %}
+    </div>
+  </form>
+  <p class="note">Anyone can see the list. Changing a status needs the team passcode &mdash; ask a coach.</p>
+  {% else %}
+  <p class="note">Read-only: editing is not turned on for this site.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  {% if store %}
+  <div class="cards parts-summary">
+    <div class="card"><span class="k">Need it</span><span class="v parts-n-missing" id="n-missing">{{ counts.missing }}</span></div>
+    <div class="card"><span class="k">Low stock</span><span class="v parts-n-low" id="n-low">{{ counts.low }}</span></div>
+    <div class="card"><span class="k">In stock</span><span class="v parts-n-have" id="n-have">{{ counts.have }}</span>
+      <span class="f">of {{ state|length }} parts</span></div>
+  </div>
+  {% endif %}
+
+  <div class="row">
+    <input type="search" class="search" id="parts-search" placeholder="Search parts&hellip;" autocomplete="off">
+    <label class="parts-need-toggle"><input type="checkbox" id="parts-need"> Only what needs buying</label>
+  </div>
+  <div class="tabs parts-chips" id="parts-chips" role="group" aria-label="Category">
+    <button type="button" class="tab on" data-cat="">All</button>
+    {% for group in groups %}
+    <button type="button" class="tab" data-cat="{{ group.category }}">{{ group.category }}</button>
+    {% endfor %}
+  </div>
+
+  <p class="warn parts-error" id="parts-error" role="alert" hidden></p>
+
+  {% for group in groups %}
+  <section class="parts-group" data-cat="{{ group.category }}">
+    <div class="parts-group-head">
+      <h2>{{ group.category }}</h2>
+      <span class="note parts-group-count"></span>
+      {% if editor %}
+      <button type="button" class="secondary small parts-mark-all">Mark all in stock</button>
+      {% endif %}
+    </div>
+    <div class="parts-grid">
+      {% for part in group.parts %}
+      {% set status = state[part.id] if store else 'unknown' %}
+      {% if editor %}
+      <button type="button" class="part" data-id="{{ part.id }}" data-state="{{ status }}">
+      {% else %}
+      <div class="part" data-id="{{ part.id }}" data-state="{{ status }}">
+      {% endif %}
+        <span class="part-name">{{ part.name }}</span>
+        <span class="part-status">{{ labels.get(status, '—') }}</span>
+      {% if editor %}</button>{% else %}</div>{% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <p class="note" id="parts-empty" hidden>No parts match.</p>
+</div>
+
+{% if log %}
+<div class="panel">
+  <h2>Recent changes</h2>
+  <table class="parts-log">
+    <tbody>
+    {% for entry in log %}
+    <tr>
+      <td class="muted"><time data-t="{{ entry.t }}">{{ entry.when }}</time></td>
+      <td>{{ entry.who }}</td>
+      <td>{{ entry.name }}</td>
+      <td><span class="part-status" data-state="{{ entry.from or 'missing' }}">{{ labels.get(entry.from or 'missing') }}</span>
+        &rarr; <span class="part-status" data-state="{{ entry.to }}">{{ labels.get(entry.to) }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const STATES = {{ states|list|tojson }};
+  const LABELS = {{ labels|tojson }};
+  const editable = {{ 'true' if editor else 'false' }};
+  const parts = [...document.querySelectorAll('.part[data-id]')];
+  const groups = [...document.querySelectorAll('.parts-group')];
+  const errorBox = document.getElementById('parts-error');
+  const search = document.getElementById('parts-search');
+  const needOnly = document.getElementById('parts-need');
+  let category = '';
+
+  // Log times arrive in UTC; show them in the reader's own timezone.
+  for (const el of document.querySelectorAll('time[data-t]')) {
+    const date = new Date(Number(el.dataset.t) * 1000);
+    el.textContent = date.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  }
+
+  function paint(el, state) {
+    el.dataset.state = state;
+    el.querySelector('.part-status').textContent = LABELS[state];
+  }
+
+  function tally() {
+    if (!{{ 'true' if store else 'false' }}) return;   // no statuses to count
+    const totals = {missing: 0, low: 0, have: 0};
+    for (const el of parts) totals[el.dataset.state]++;
+    for (const key in totals) document.getElementById('n-' + key).textContent = totals[key];
+    for (const group of groups) {
+      const mine = [...group.querySelectorAll('.part')];
+      const have = mine.filter((el) => el.dataset.state === 'have').length;
+      const low = mine.filter((el) => el.dataset.state === 'low').length;
+      group.querySelector('.parts-group-count').textContent =
+        `${have} / ${mine.length} in stock` + (low ? ` · ${low} low` : '');
+      const markAll = group.querySelector('.parts-mark-all');
+      if (markAll) markAll.textContent = have === mine.length ? 'Clear section' : 'Mark all in stock';
+    }
+  }
+
+  function filter() {
+    const query = search.value.trim().toLowerCase();
+    let any = false;
+    for (const group of groups) {
+      let shown = 0;
+      for (const el of group.querySelectorAll('.part')) {
+        const visible = (!category || group.dataset.cat === category)
+          && (!query || el.querySelector('.part-name').textContent.toLowerCase().includes(query))
+          && (!needOnly.checked || el.dataset.state !== 'have');
+        el.hidden = !visible;
+        if (visible) shown++;
+      }
+      group.hidden = shown === 0;
+      any ||= shown > 0;
+    }
+    document.getElementById('parts-empty').hidden = any;
+  }
+
+  // Painted first and saved after, so a tap feels instant on shop wifi. A
+  // failed save puts the old statuses back and says why.
+  async function save(changes) {
+    const before = {};
+    for (const el of parts) if (el.dataset.id in changes) {
+      before[el.dataset.id] = el.dataset.state;
+      paint(el, changes[el.dataset.id]);
+    }
+    tally();
+    errorBox.hidden = true;
+    try {
+      const response = await fetch('/tools/parts/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({changes}),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `Save failed (${response.status})`);
+    } catch (err) {
+      for (const el of parts) if (el.dataset.id in before) paint(el, before[el.dataset.id]);
+      tally();
+      errorBox.textContent = err.message + ' Nothing was changed.';
+      errorBox.hidden = false;
+    }
+    filter();
+  }
+
+  if (editable) {
+    for (const el of parts) {
+      el.addEventListener('click', () => {
+        const next = STATES[(STATES.indexOf(el.dataset.state) + 1) % STATES.length];
+        save({[el.dataset.id]: next});
+      });
+    }
+    for (const group of groups) {
+      const button = group.querySelector('.parts-mark-all');
+      button.addEventListener('click', () => {
+        const mine = [...group.querySelectorAll('.part')];
+        const target = mine.every((el) => el.dataset.state === 'have') ? 'missing' : 'have';
+        const verb = target === 'have' ? 'in stock' : 'need it';
+        if (!window.confirm(`Mark all ${mine.length} parts in ${group.dataset.cat} as "${verb}"?`)) return;
+        save(Object.fromEntries(mine.map((el) => [el.dataset.id, target])));
+      });
+    }
+  }
+
+  for (const chip of document.querySelectorAll('#parts-chips .tab')) {
+    chip.addEventListener('click', () => {
+      category = chip.dataset.cat;
+      for (const other of document.querySelectorAll('#parts-chips .tab')) other.classList.toggle('on', other === chip);
+      filter();
+    });
+  }
+  search.addEventListener('input', filter);
+  needOnly.addEventListener('change', filter);
+
+  tally();
+  filter();
+})();
+</script>
+{% endblock %}
