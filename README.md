@@ -55,6 +55,7 @@ integrations/         outside data sources (see integrations/README.md)
 analysis/             ratings derived from match results (see analysis/README.md)
 webapp/               Flask server, team-centric pages, and the setup workspace
   programs.py           V5RC or VIQRC: which catalog a page reads, how a match scores, and the palette
+  parts.py              the V5 parts list behind Tools → Parts (students set status; the list is code)
 training/             detector training (currently not working — see below)
 archive/              approaches that failed, kept for their findings
 
@@ -70,7 +71,7 @@ data/                 everything persisted, per match (see data/README.md)
 docs/                 evidence images referenced from code comments
 deploy/               hosting: a VPS with systemd and Caddy, or Vercel (see deploy/README.md)
 api/                  Vercel's entry point: the same Flask app as a function
-tools/                snapshot.py builds the published data subset
+tools/                snapshot.py builds the published data subset; import_parts.py loads old parts statuses
 ```
 
 ## How a run works

@@ -7,6 +7,7 @@
 # conditional import block in webapp/server.py.
 flask>=3.0
 numpy>=1.26          # the least-squares solve behind OPR/DPR/CCWM
+requests>=2.31       # parts status, saved to Upstash Redis over its REST API
 
 # Needed once the Learn guides land (feature/learn-guides):
 # markdown>=3.5
