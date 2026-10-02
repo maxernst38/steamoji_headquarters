@@ -29,7 +29,8 @@ import argparse
 import datetime as _dt
 import time
 
-from integrations import vex_events, webcasts, youtube
+from analysis import alignment
+from integrations import event_streams, vex_events, webcasts, youtube
 from storage import catalog
 
 # A program, its season, and where its catalog lives. Season ids are not stable
@@ -41,6 +42,8 @@ PROGRAMS = {
     "viqrc": {"season": 203, "directory": vex_events.PROGRAM_CATALOGS["viqrc"],
               "label": "VIQRC"},
 }
+
+STREAM_BUDGET = 2_000   # of the day's 9,500; a channel walk costs about 25
 
 RECENT_DAYS = 7      # an event that ended this recently may still be publishing results
 SOON_DAYS = 30       # an event this close is still taking registrations
@@ -122,7 +125,14 @@ def main():
                         help="ignore the cache completely - slow, and rarely needed")
     parser.add_argument("--no-events", action="store_true", help="skip the API walk")
     parser.add_argument("--no-webcasts", action="store_true")
+    parser.add_argument("--no-streams", action="store_true",
+                        help="skip resolving webcast links to stream videos")
+    parser.add_argument("--no-align", action="store_true",
+                        help="skip giving matches an offset into their event's stream")
     parser.add_argument("--no-youtube", action="store_true")
+    parser.add_argument("--stream-budget", type=int, default=STREAM_BUDGET,
+                        help=f"quota units for the stream walk (default {STREAM_BUDGET}), "
+                             "kept well under the day's total so the team search still runs")
     parser.add_argument("--budget", type=int, default=youtube.DEFAULT_BUDGET,
                         help="YouTube quota units to spend at most")
     args = parser.parse_args()
@@ -153,6 +163,41 @@ def main():
         except Exception as error:                  # one dead page must not stop the rest
             print(f"  failed: {type(error).__name__}: {error}")
             summary.append(f"webcasts: FAILED ({type(error).__name__})")
+
+    # Before YouTube, and capped well under the day's budget: both spend the same
+    # 10,000 units against the same ledger, and a channel walk is cheap enough
+    # (about 25 units) that letting it run first costs the team search almost
+    # nothing. Resolving footage also only gets harder with time - a partner's
+    # channel buries the stream deeper every week - while a team's channel does not.
+    if not args.no_streams:
+        print("\nEvent streams")
+        try:
+            totals = event_streams.resolve(budget=args.stream_budget)
+            summary.append(f"streams: {totals['videos']} attached across "
+                           f"{totals['events']} event(s), "
+                           f"{totals['suggestions']} suggestion(s)")
+        except youtube.KeyMissing as error:
+            print(f"  skipped: {error}")
+            summary.append("streams: skipped (no API key)")
+        except Exception as error:
+            print(f"  failed: {type(error).__name__}: {error}")
+            summary.append(f"streams: FAILED ({type(error).__name__})")
+
+    # Purely local: it reads the catalog and the resolved streams and writes
+    # offsets, spending no quota, so it runs after the streams that feed it and
+    # needs no budget of its own.
+    if not args.no_align:
+        print("\nMatch offsets")
+        for code in args.programs:
+            try:
+                totals = alignment.run(directory=PROGRAMS[code]["directory"])
+                summary.append(f"{PROGRAMS[code]['label']} offsets: "
+                               f"{totals['written']} match(es) placed in a stream, "
+                               f"{totals['refused']} event(s) refused")
+            except Exception as error:
+                print(f"  failed: {type(error).__name__}: {error}")
+                summary.append(f"{PROGRAMS[code]['label']} offsets: "
+                               f"FAILED ({type(error).__name__})")
 
     if not args.no_youtube:
         print("\nYouTube")

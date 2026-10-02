@@ -20,6 +20,7 @@ Files land under `data/` — `data/calibrations/`, `data/seeds/`, `data/results/
 | `regions.py` | groups a team's location into something worth filtering by |
 | `event_details.py` | awards, qualification rankings and skills, one file per event |
 | `webcasts.py` | one webcast link per event SKU, merged across refreshes (`data/webcasts.json`) |
+| `event_streams.py` | the stream videos behind that link, graded, with removals and hand-attached links (`data/event_streams.json`) |
 | `team_media.py` | each team's YouTube channel and robot videos, with confidence and removals (`data/team_media.json`) |
 
 ## Why the catalog is separate
@@ -53,6 +54,30 @@ matches already in the catalog (`analysis/bracket.py`), and a stored copy could
 disagree with the matches it came from with nothing to say which was right.
 39 of 686 events have one at all, so "this event ran no eliminations" is the
 common case rather than an edge case.
+
+## Why stream videos are not in the webcast table
+
+`webcasts.py` records what the page listed and merges, never replacing: a link it
+has seen is kept even once the page drops it. That is right for a scrape and wrong
+for a derived result, which has to be replaceable — re-grading after a rule change
+must be able to *drop* a video that no longer qualifies.
+
+So `event_streams.py` is its own table, shaped like `team_media.py` rather than
+like `webcasts.py`: every video carries `confidence`, `source` and `reason`, and
+the same two rules protect hand decisions — a removed video stays removed by id,
+and one attached by hand is never replaced by an automatic run. Removal matters
+more here than for team media, because one partner's permanent `/live/` address is
+listed for eleven events, so a wrong attachment is expected rather than rare.
+
+**Several videos per event is normal, not a conflict.** A two-day event with three
+divisions is six streams, and nothing tries to pick a single winner. Which stream
+covers which match is a separate question, answered by reading the footage.
+
+`note` says why an event resolved to nothing — no dates, a non-YouTube link, a
+channel that published nothing that weekend, or a walk that did not reach far
+enough back. An event with no footage is the common case early in a season, since
+partners post the link before the stream exists, and a note is the difference
+between "there is none" and "we did not find it".
 
 ## Regions
 

@@ -365,7 +365,11 @@
         </span>
         <span class="meta mono">{{ row.when.date or '' }}</span>
         {%- if row.footage %}
-        <a class="meta" href="{{ row.footage.watch }}" target="_blank" rel="noopener noreferrer">▶ {{ row.footage.clock or 'watch' }}</a>
+        {# "~" rather than a bare clock: this offset came from the schedule, and the
+           event may have been running late. See analysis/alignment.py. #}
+        <a class="meta" href="{{ row.footage.watch }}" target="_blank" rel="noopener noreferrer"
+           {% if row.footage.approximate %}title="From the match schedule, so the event may have been running late — scrub from here"{% endif %}>▶
+          {{- ' ~' if row.footage.approximate }}{{ row.footage.clock or 'watch' }}</a>
         {%- endif %}
         {%- if row.match.video and row.match.video.file %}
         <span class="meta mono">{{ row.match.video.file }}</span>

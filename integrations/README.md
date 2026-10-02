@@ -10,6 +10,7 @@ match was typed in or imported.
 |---|---|
 | `vex_events.py` | the Public VEX Events API: events, teams, matches |
 | `webcasts.py` | webcast links scraped from `events.vex.com/webcasts` — links only, nothing downloaded |
+| `event_streams.py` | turns those links into the actual stream videos, by walking the linked channel |
 | `youtube.py` | each team's YouTube channel and robot videos, via the YouTube Data API — links only |
 
 ## The API moved
@@ -202,6 +203,57 @@ second run reports everything unchanged.
 - **Links are never deleted by a refresh.** A changed link keeps the old one in
   `previous`. Partners often post only days before an event, so coverage of
   upcoming events grows as the season goes on.
+
+## From a webcast link to the actual stream
+
+```
+python -m integrations.event_streams --plan     # what would be walked; spends nothing
+python -m integrations.event_streams            # resolve, within a quota slice
+python -m integrations.event_streams --sku RE-V5RC-26-4244
+python -m integrations.event_streams --status
+```
+
+A webcast link is mostly not footage: 89 of 126 rows point at a channel, so the
+stream exists but nothing says which video it is. This walks the linked channel's
+uploads and keeps what was published while the event ran, into
+`storage/event_streams.py`.
+
+**The walk is per channel, not per event.** Partners stream every event they run
+from one channel, so walking per event would fetch the same upload list a dozen
+times. Grouping by channel also puts the date window to work: eleven events on
+one channel are separated by when they ran, which is what the uploads carry.
+
+`search` is never used here. A channel's uploads cost 1 unit per 50 videos
+through `playlistItems`, against 100 for a search that would only give a worse
+date filter — so a channel walk is about 25 units at worst, and `refresh.py`
+gives the whole step a 2,000-unit slice ahead of the team search.
+
+Four things the grading has to survive:
+
+- **A short video published during an event is not the stream.** Awards clips and
+  highlight reels land on the same day, so under 20 minutes is a suggestion at best.
+- **Two events can share a channel and a day**, and nothing in the uploads
+  separates them except the title. Where the title cannot, both drop to
+  suggestions rather than both claiming every video. Where it can, the other
+  event's stream is dropped from this one's suggestions entirely.
+- **A direct video link can still be wrong.** The eleven-event `/live/` address
+  looks like the strongest possible evidence and is right for at most one of
+  them, so a shared link is resolved through its channel like any other.
+- **An upload date is UTC and an event date is local.** An evening league night on
+  the US west coast publishes the next day in UTC, so the window is a day wider
+  at both ends.
+
+Event names are matched on distinctive words only — four characters or more,
+with the competition vocabulary ("VEX", "Signature", "Championship", "Day")
+dropped, since it appears in half the names on the page. Two words must match,
+except where the name offers only one: "Cascade Cup" reduces to `{cascade}`,
+and demanding two would stop a short-named event recognising its own stream.
+
+**Not yet measured against the real table.** The link shapes, duration parsing,
+date windows, grading rules and the shared-channel case are covered by fixtures,
+but no run against `data/webcasts.json` has happened yet, so the hit rate is
+unknown. `--plan` reports what would be walked without spending a unit, and is
+the right first thing to look at.
 
 ## YouTube channels and robot videos
 

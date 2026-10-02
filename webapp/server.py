@@ -1515,9 +1515,18 @@ def _video_field(form):
 
 
 def _footage(match):
-    """The match's YouTube link, ready to render, or None."""
+    """The match's YouTube link, ready to render, or None.
+
+    `approximate` carries through because an offset derived from the schedule
+    (`analysis/alignment.py`) can be tens of minutes out, and a clock rendered
+    the same way as a hand-checked one would imply an accuracy it does not have.
+    """
     video = (match or {}).get("video") or {}
-    return videolinks.describe(video.get("url"), video.get("watch_start"))
+    described = videolinks.describe(video.get("url"), video.get("watch_start"))
+    if described:
+        described["approximate"] = bool(video.get("approximate"))
+        described["how"] = video.get("how")
+    return described
 
 
 @local_only(app.route("/events/new", methods=["POST"]))

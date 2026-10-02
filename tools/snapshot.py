@@ -26,6 +26,7 @@ INCLUDE = [
     ("catalog_viqrc", False),          # the same for VIQRC
     ("event_details", False),          # awards, rankings, skills
     ("webcasts.json", False),          # one stream link per event
+    ("event_streams.json", False),     # the stream videos that link resolved to
     ("team_media.json", False),        # YouTube channels and robot videos
     ("team_media_viqrc.json", False),
 ]
