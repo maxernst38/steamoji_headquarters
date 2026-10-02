@@ -13,7 +13,7 @@
     <a class="brand" href="/">VEX Tracker</a>
     <a href="/" class="{{ 'on' if tab == 'scout' }}">Scout</a>
     <a href="/learn" class="{{ 'on' if tab == 'learn' }}">Learn</a>
-    <a href="/practice" class="{{ 'on' if tab == 'practice' }}">Practice</a>
+    <a href="/tools" class="{{ 'on' if tab == 'tools' }}">Tools</a>
     <span class="program-switch" role="group" aria-label="Program">
       <span class="program-knob" aria-hidden="true"></span>
       {% for option in programs %}
@@ -25,13 +25,17 @@
       {% endfor %}
     </span>
   </nav>
-  {# Second row: the sections of whichever tab is open. Only Scout has any yet. #}
+  {# Second row: the sections of whichever tab is open. #}
   {% if tab == 'scout' %}
   <nav class="nav nav-sections">
     <a href="/" class="{{ 'on' if section == 'teams' }}">Teams</a>
     <a href="/matches" class="{{ 'on' if section == 'matches' }}">Matches</a>
     <a href="/events" class="{{ 'on' if section == 'events' }}">Events</a>
     <a href="/help" class="{{ 'on' if section == 'help' }}">How it's calculated</a>
+  </nav>
+  {% elif tab == 'tools' %}
+  <nav class="nav nav-sections">
+    <a href="/tools/parts" class="{{ 'on' if section == 'parts' }}">Parts</a>
   </nav>
   {% endif %}
   <h1>{% block heading %}{% endblock %}</h1>

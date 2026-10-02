@@ -11,14 +11,18 @@ reattaches to a running job instead of losing it.
 """
 import base64
 import datetime as _dt
+import hashlib
+import hmac
 import os
 
 from storage import paths
 import threading
+import time
 import traceback
 import uuid
 from urllib.parse import quote
 
+import requests
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, send_from_directory
 
 from storage import calibration_store
@@ -27,6 +31,8 @@ from storage import event_details
 from storage import regions
 from storage import webcasts
 from storage import team_media
+from storage import parts_inventory
+from webapp import parts
 from webapp import programs
 from webapp import videolinks
 from analysis import bracket as bracket_module
@@ -610,7 +616,7 @@ def _program_context():
     """`program`, `programs` and `here` for every template.
 
     `tab` is defaulted here and overridden by whatever a view passes, so only
-    the Learn and Practice views have to name their tab.
+    the Learn and Tools views have to name their tab.
     """
     chosen = _program()
     code = chosen["code"]
@@ -1180,8 +1186,121 @@ def page_learn():
 
 @app.route("/practice")
 def page_practice():
-    """Placeholder for the Practice tab."""
-    return render_template("practice.html", tab="practice")
+    """The tab that became Tools, so old links and bookmarks still land."""
+    return redirect("/tools", code=301)
+
+
+@app.route("/tools")
+def page_tools():
+    """Tools has one section so far; the simulator joins it from its own branch."""
+    return redirect("/tools/parts")
+
+
+# The parts status is the one thing students change on the hosted site, so its
+# routes are registered everywhere - a deliberate exception to `local_only`.
+# What keeps that small: a shared passcode to edit, the parts list fixed in
+# webapp/parts.py, statuses checked against it, and every change logged by name.
+# Locally there is no passcode, the same as every other form on the working copy.
+PARTS_COOKIE = "parts_editor"
+PARTS_COOKIE_MAX_AGE = 60 * 60 * 24 * 180     # a school year, near enough
+PARTS_NAME_MAX = 40
+
+
+def _parts_signature(name, passcode):
+    """Ties the cookie to the passcode, so changing the passcode signs everyone out."""
+    return hmac.new(passcode.encode(), f"parts-editor:{name}".encode(), hashlib.sha256).hexdigest()
+
+
+def _parts_editor():
+    """Who may change statuses on this request, or None for read-only."""
+    if not READ_ONLY:
+        return "local"
+    passcode = os.environ.get("PARTS_PASSCODE")
+    if not passcode:
+        return None
+    name, _, signature = request.cookies.get(PARTS_COOKIE, "").rpartition("|")
+    if name and hmac.compare_digest(signature, _parts_signature(name, passcode)):
+        return name
+    return None
+
+
+@app.route("/tools/parts")
+def page_parts():
+    """Every part and whether we have it, editable by anyone with the passcode."""
+    store = parts_inventory.backend()
+    error = None
+    try:
+        state = parts_inventory.load()
+        log = parts_inventory.recent(15)
+    except (requests.RequestException, RuntimeError, ValueError) as exc:
+        state, log, error = {}, [], str(exc)
+    for entry in log:
+        entry["name"] = parts.NAMES.get(entry.get("id"), entry.get("id"))
+        # UTC here; the page rewrites it in the reader's own timezone, which a
+        # Vercel function does not know.
+        entry["when"] = _dt.datetime.fromtimestamp(entry.get("t") or 0, _dt.timezone.utc) \
+            .strftime("%Y-%m-%d %H:%M UTC")
+    response = app.make_response(render_template(
+        "tools_parts.html", tab="tools", section="parts",
+        groups=parts.GROUPS, state={pid: state.get(pid, parts.DEFAULT) for pid in parts.IDS},
+        states=parts.STATES, labels=parts.LABELS, log=log,
+        editor=_parts_editor() if store else None, store=store, store_error=error,
+        can_unlock=READ_ONLY and bool(os.environ.get("PARTS_PASSCODE")) and bool(store),
+        unlock_failed=request.args.get("unlock") == "wrong"))
+    # Statuses change under the page; a cached copy would show a stale shelf.
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/tools/parts/unlock", methods=["POST"])
+def parts_unlock():
+    passcode = os.environ.get("PARTS_PASSCODE")
+    name = " ".join((request.form.get("name") or "").split())[:PARTS_NAME_MAX].replace("|", "")
+    offered = request.form.get("passcode") or ""
+    if not passcode or not name or not hmac.compare_digest(offered.encode(), passcode.encode()):
+        # A second per wrong guess: nothing to a student who mistyped, and
+        # enough to make guessing a passcode by script slow.
+        time.sleep(1)
+        return redirect("/tools/parts?unlock=wrong")
+    response = redirect("/tools/parts")
+    response.set_cookie(PARTS_COOKIE, f"{name}|{_parts_signature(name, passcode)}",
+                        max_age=PARTS_COOKIE_MAX_AGE, httponly=True, samesite="Lax",
+                        secure=request.is_secure)
+    return response
+
+
+@app.route("/tools/parts/lock", methods=["POST"])
+def parts_lock():
+    response = redirect("/tools/parts")
+    response.delete_cookie(PARTS_COOKIE)
+    return response
+
+
+@app.route("/tools/parts/status", methods=["POST"])
+def parts_status():
+    """Set statuses: {"changes": {part id: "missing" | "low" | "have"}}.
+
+    JSON only. A cross-site form cannot send application/json without a CORS
+    preflight this app never answers, which, with a SameSite=Lax cookie, is
+    what stops another page from changing statuses as a signed-in student.
+    """
+    who = _parts_editor()
+    if not who:
+        return jsonify({"error": "Enter the passcode to change statuses."}), 403
+    if not parts_inventory.backend():
+        return jsonify({"error": "No parts storage is configured here."}), 503
+    if not request.is_json:
+        return jsonify({"error": "Expected JSON."}), 415
+    changes = (request.get_json(silent=True) or {}).get("changes")
+    if (not isinstance(changes, dict) or not changes or len(changes) > len(parts.IDS)
+            or any(pid not in parts.IDS or value not in parts.STATES
+                   for pid, value in changes.items())):
+        return jsonify({"error": "Unknown part or status."}), 400
+    try:
+        state = parts_inventory.apply(changes, who)
+    except (requests.RequestException, RuntimeError, ValueError) as exc:
+        return jsonify({"error": f"Could not save: {exc}"}), 502
+    return jsonify({"state": {pid: state.get(pid, parts.DEFAULT) for pid in parts.IDS}})
 
 
 @app.route("/help")
